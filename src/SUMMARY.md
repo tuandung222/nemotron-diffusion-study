@@ -19,9 +19,15 @@
 - [2.4 — Comparisons: self-speculation vs MTP, EAGLE, Medusa, block-diffusion](./02-mixed-ar-diffusion/04-comparisons.md)
 - [2.5 — Speed-of-Light analysis: the theoretical ceiling of parallel decoding](./02-mixed-ar-diffusion/05-speed-of-light.md)
 
-# Series 3 — Nemotron-Labs-Diffusion deep dive *(planned)*
+# Series 3 — Nemotron-Labs-Diffusion deep dive
 
-- [3.1 — Model card and config walkthrough](./03-nemotron-deep-dive/README.md)
+- [3.1 — Model card and config walkthrough](./03-nemotron-deep-dive/01-model-card-and-config.md)
+- [3.2 — Tri-mode inference: set_attention_mode deep dive](./03-nemotron-deep-dive/02-tri-mode-inference.md)
+- [3.3 — The joint training pipeline: curriculum + DP-rank varying masking](./03-nemotron-deep-dive/03-joint-training-pipeline.md)
+- [3.4 — Linear self-speculation + LoRA drafter alignment](./03-nemotron-deep-dive/04-linear-self-spec-lora.md)
+- [3.5 — Quadratic self-speculation + FlexAttention](./03-nemotron-deep-dive/05-quadratic-self-spec.md)
+- [3.6 — VLM extension: Pixtral encoder + asymmetric dual-stream](./03-nemotron-deep-dive/06-vlm-extension.md)
+- [3.7 — Benchmarks and deployment economics](./03-nemotron-deep-dive/07-benchmarks-and-deployment.md)
 
 # Series 4 — Re-implementation lab *(planned)*
 

@@ -1,0 +1,21 @@
+# Build output of mdBook
+book/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/

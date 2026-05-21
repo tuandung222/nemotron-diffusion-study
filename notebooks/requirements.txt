@@ -1,0 +1,16 @@
+# Series 4 notebooks dependencies.
+# Pinned to recent stable versions; loosen if needed for your environment.
+
+torch>=2.5,<3
+transformers>=4.45,<5
+einops>=0.8
+numpy>=1.26,<3
+tqdm>=4.66
+matplotlib>=3.8
+jupyterlab>=4.2
+ipywidgets>=8.1
+
+# Tokenizer & datasets used in the labs
+sentencepiece>=0.2
+datasets>=2.20
+tiktoken>=0.7

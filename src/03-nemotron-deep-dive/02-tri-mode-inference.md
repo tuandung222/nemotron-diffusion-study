@@ -1,4 +1,4 @@
-# 3.2 - Tri-mode inference: `set_attention_mode` deep dive
+# 3.2 — Tri-mode inference: `set_attention_mode` deep dive
 
 > **Goal of this lecture.** Read the actual source code of `set_attention_mode`, `compute_block_mask`, `block_diff_mask`, and `sbd_block_diff_mask` from `modeling_nemotron_labs_diffusion_vlm.py`, and connect each line to the abstract masks from Lecture 2.2. By the end you should be able to (i) construct the FlexAttention mask for any of the four modes from first principles, (ii) explain why each branch exists, and (iii) modify the code to add a fifth mode if needed.
 
@@ -27,7 +27,7 @@ def set_attention_mode(self, mode, block_size=None):
     self.block_size = block_size
 ```
 
-This is called *per layer* at the start of every forward pass. Note: there's no global "mode" - every attention layer sets its own. In practice all 34 layers share the same mode, but the API allows per-layer overrides (used during the LoRA drafter alignment experiments - Lecture 3.4).
+This is called *per layer* at the start of every forward pass. Note: there's no global "mode" — every attention layer sets its own. In practice all 34 layers share the same mode, but the API allows per-layer overrides (used during the LoRA drafter alignment experiments — Lecture 3.4).
 
 ---
 
@@ -167,7 +167,7 @@ Allowed if:
 
 So this term enables:
 - **Noisy → noisy intra-block**: each masked position can attend to all other masked/observed positions in the same block. This is the bidirectional denoising attention.
-- **Clean → clean intra-block**: this is part of the AR loss; clean positions can attend to all other clean positions in the same block. But - this would *break* causality! In particular it would let clean position $i$ see clean position $i+1$, leaking the label.
+- **Clean → clean intra-block**: this is part of the AR loss; clean positions can attend to all other clean positions in the same block. But — this would *break* causality! In particular it would let clean position $i$ see clean position $i+1$, leaking the label.
 
 Wait. The third term `block_causal` will handle the clean-only case more restrictively. Let's see how the terms compose. The final mask is the **OR** of all three:
 
@@ -184,7 +184,7 @@ Actually no: **the `block_diff_mask` is the *training-time* mask for the `bidire
 - The diffusion loss is computed *only* at noisy positions where the original token has been replaced by `[MASK]`.
 - The AR loss is computed only at clean positions, *but* using a strict-causal mask reused later (the AR-mode forward).
 
-In the joint training step, the model uses `block_diff` for the dual-stream forward, but the AR loss is computed using a *separate* forward in `autoregressive` mode. So the M_BD term being permissive on clean-clean is fine - clean-view attention here is for the diffusion-loss computation only.
+In the joint training step, the model uses `block_diff` for the dual-stream forward, but the AR loss is computed using a *separate* forward in `autoregressive` mode. So the M_BD term being permissive on clean-clean is fine — clean-view attention here is for the diffusion-loss computation only.
 
 This is a subtle code organisation: there are *two* forwards per joint-training step:
 1. `block_diff` forward on `[noisy ‖ clean]`, producing the diffusion-loss logits at noisy positions and the clean-view representations.
@@ -192,7 +192,7 @@ This is a subtle code organisation: there are *two* forwards per joint-training 
 
 Both forwards share weights; the AR forward is a regular causal pass over `clean`.
 
-The trick of using `block_diff` to compute the diffusion loss while still allowing clean→clean intra-block is fine because the diffusion loss doesn't read clean→clean - it only reads noisy→{noisy, clean} predictions.
+The trick of using `block_diff` to compute the diffusion loss while still allowing clean→clean intra-block is fine because the diffusion loss doesn't read clean→clean — it only reads noisy→{noisy, clean} predictions.
 
 ### 3.4 M_OBC: offset block-causal
 
@@ -208,7 +208,7 @@ Allowed if:
 - Noisy query, clean key, AND
 - The query's block index is strictly greater than the key's block index.
 
-So a noisy position in block $i$ can attend to clean positions in blocks $0, 1, ..., i-1$ but **not** block $i$. The "offset" is the strict `>`. This is the **conditional context**: when denoising noisy block $i$, the model conditions on the *clean* version of all preceding blocks (which is its left-context - analogous to KV cache in AR).
+So a noisy position in block $i$ can attend to clean positions in blocks $0, 1, ..., i-1$ but **not** block $i$. The "offset" is the strict `>`. This is the **conditional context**: when denoising noisy block $i$, the model conditions on the *clean* version of all preceding blocks (which is its left-context — analogous to KV cache in AR).
 
 The reason for `>` not `>=`: block $i$'s clean view is the *label* for denoising block $i$. If we allowed the noisy view to look at the clean view at the same block index, we'd leak the answer.
 
@@ -226,7 +226,7 @@ So clean-view positions can attend to clean-view positions in the same or earlie
 
 Why block-causal and not token-causal? Two reasons:
 
-1. **It makes the AR-loss forward cheap.** During inference, the KV cache is computed in block-causal layout. Each new block prefills against a cached past - analogous to AR but at block granularity.
+1. **It makes the AR-loss forward cheap.** During inference, the KV cache is computed in block-causal layout. Each new block prefills against a cached past — analogous to AR but at block granularity.
 
 2. **It enables self-speculation.** During self-speculation, the AR-verify forward reuses the clean-prefix KV from the most recent committed prefix. The KV is laid out block by block.
 
@@ -255,7 +255,7 @@ This matrix is exactly the structured 2L × 2L mask from Lecture 2.2 Figure 3.
 
 A dense materialisation of this mask is impractical:
 
-- For sequence length $L = 4096$ and dual-stream length $2L = 8192$, the mask has $8192^2 = 67$M entries - 8 MB at boolean, but the *write* and *read* costs dominate.
+- For sequence length $L = 4096$ and dual-stream length $2L = 8192$, the mask has $8192^2 = 67$M entries — 8 MB at boolean, but the *write* and *read* costs dominate.
 - The mask is highly structured (block-sparse): only ~5% of entries are `True`.
 - A new mask must be built per forward pass (when $n$ or $B$ varies).
 
@@ -267,7 +267,7 @@ PyTorch's **FlexAttention** API solves this by accepting a *predicate function* 
 
 For NLD's `block_diff` mask, ~95% of tiles are empty, so the kernel achieves > 10× speedup vs a dense mask.
 
-The trade-off: FlexAttention is **PyTorch 2.5+** only (or torch.compile + manual lowering). For older PyTorch, NLD falls back to SDPA with a dense mask - usable but slower.
+The trade-off: FlexAttention is **PyTorch 2.5+** only (or torch.compile + manual lowering). For older PyTorch, NLD falls back to SDPA with a dense mask — usable but slower.
 
 ---
 
@@ -279,7 +279,7 @@ Lecture 3.5 will cover quadratic self-speculation in detail. For now, just note 
 def sbd_block_diff_mask(block_size, b, h, q_idx, kv_idx, n):
     # ... same x0_flag and block_q/block_kv as block_diff_mask ...
 
-    # **1. Block Diagonal Mask (M_BD) - only on the noisy view **
+    # **1. Block Diagonal Mask (M_BD) — only on the noisy view **
     block_diagonal = (block_q == block_kv) & (x0_flag_kv == 0) & (x0_flag_q == 0)
 
     # **2. Offset Block-Causal Mask (M_OBC) **
@@ -289,7 +289,7 @@ def sbd_block_diff_mask(block_size, b, h, q_idx, kv_idx, n):
         & (x0_flag_q  == 0)
     )
 
-    # **3. Fully Causal Mask - replaces block_causal on the clean view **
+    # **3. Fully Causal Mask — replaces block_causal on the clean view **
     fully_causal = (q_idx >= kv_idx) & (x0_flag_kv == 1) & (x0_flag_q == 1)
 
     # **4. Combine Masks **
@@ -334,9 +334,9 @@ To make the mask construction concrete, here's the lifecycle of one dual-stream 
    - AR loss: separate forward in 'autoregressive' mode on clean_ids alone
 ```
 
-This is **two forwards per training step** - once in `block_diff` mode on the 2L sequence (for diffusion loss + clean-view representations), once in `autoregressive` mode on the L clean sequence (for AR loss). The forward cost is ~3× a standard AR forward of length L, because the block-diff forward sees 2L tokens and the AR forward sees L.
+This is **two forwards per training step** — once in `block_diff` mode on the 2L sequence (for diffusion loss + clean-view representations), once in `autoregressive` mode on the L clean sequence (for AR loss). The forward cost is ~3× a standard AR forward of length L, because the block-diff forward sees 2L tokens and the AR forward sees L.
 
-> **Cost accounting.** A standard AR pretraining step on length L is $O(L^2 d + L d^2)$. NLD's joint training step is roughly $O((2L)^2 d + 2L d^2) + O(L^2 d + L d^2) = O(5 L^2 d + 3 L d^2)$ - about 3× the FLOPs. The tech report's reported training cost of "~$3\times$ standard pretraining" matches.
+> **Cost accounting.** A standard AR pretraining step on length L is $O(L^2 d + L d^2)$. NLD's joint training step is roughly $O((2L)^2 d + 2L d^2) + O(L^2 d + L d^2) = O(5 L^2 d + 3 L d^2)$ — about 3× the FLOPs. The tech report's reported training cost of "~$3\times$ standard pretraining" matches.
 
 At inference, the model uses one of the four modes per forward, and the cost is the same as a standard AR forward (mode = `autoregressive`) or 2L-sequence forward (mode = `block_diff` for full self-spec cycle). Lecture 2.3 covered the inference-side accounting; here we're confirming it matches the code.
 
@@ -366,7 +366,7 @@ elif mode == 'block_isolated':
     attn_mask = lambda b, h, q, kv: block_isolated_mask(block_size, b, h, q, kv, n)
 ```
 
-Use case: a degenerate "block-only" denoising baseline, with no cross-block conditioning. Useful for ablation studies. Tech-report Table 3 contains exactly this ablation - it shows ~3 points worse on math evals vs the full `block_diff`.
+Use case: a degenerate "block-only" denoising baseline, with no cross-block conditioning. Useful for ablation studies. Tech-report Table 3 contains exactly this ablation — it shows ~3 points worse on math evals vs the full `block_diff`.
 
 ---
 
@@ -388,9 +388,9 @@ Solutions to (3), (5) are in [Appendix B](../appendix/reading-list.md#exercise-s
 
 ## 9. Further reading
 
-- **FlexAttention paper / PyTorch docs.** [pytorch.org/docs/main/nn.attention.flex_attention](https://docs.pytorch.org/docs/main/nn.attention.flex_attention.html) - the API and kernel design.
-- **`modeling_nemotron_labs_diffusion_vlm.py`**, lines 90–270 - the full implementation we walked.
-- **NLD Tech Report, §3.3** - diagrams of M_BD, M_OBC, M_BC and the rationale.
-- **Block Diffusion (Arriola et al., 2024)**, §3 - the predecessor construction of the block-causal mask.
+- **FlexAttention paper / PyTorch docs.** [pytorch.org/docs/main/nn.attention.flex_attention](https://docs.pytorch.org/docs/main/nn.attention.flex_attention.html) — the API and kernel design.
+- **`modeling_nemotron_labs_diffusion_vlm.py`**, lines 90–270 — the full implementation we walked.
+- **NLD Tech Report, §3.3** — diagrams of M_BD, M_OBC, M_BC and the rationale.
+- **Block Diffusion (Arriola et al., 2024)**, §3 — the predecessor construction of the block-causal mask.
 
 Next, Lecture 3.3: how the joint training pipeline schedules masking ratios across DP ranks, why "global loss averaging" matters, and the 2-stage curriculum that produces the released checkpoint.

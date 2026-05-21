@@ -1,4 +1,4 @@
-# Series 4 - Re-implementation lab
+# Series 4 — Re-implementation lab
 
 This series consists of six progressive Jupyter notebooks that build a working **tri-mode VLM** in miniature. Each lab is self-contained, builds on the previous one, and runs end-to-end on CPU in under 15 minutes (GPU: < 1 minute).
 
@@ -25,7 +25,7 @@ Open each notebook in order (`01-…` → `06-…`). All cells are executable as
 
 ## Design principles
 
-- **Toy scale, real patterns.** Models are 0.2–0.8M parameters on a character-level corpus. The architecture and training code mirror NLD-8B step-for-step - only the scale differs.
+- **Toy scale, real patterns.** Models are 0.2–0.8M parameters on a character-level corpus. The architecture and training code mirror NLD-8B step-for-step — only the scale differs.
 - **No GPU required.** Every notebook runs on CPU. GPU just makes it faster.
 - **Each lab has assertions.** Final cells verify shapes, mask structure, and intermediate results to catch bugs early.
 - **Progressive complexity.** Lab 1 is a standard GPT. Lab 6 is a VLM with asymmetric dual-stream. Each lab adds one concept.

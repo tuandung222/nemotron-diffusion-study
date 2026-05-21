@@ -1,4 +1,4 @@
-# 2.2 - Joint loss, dual-stream input, and the structured attention mask
+# 2.2 — Joint loss, dual-stream input, and the structured attention mask
 
 > **Goal of this lecture.** Derive the training machinery of mixed AR-diffusion from first principles. By the end you should be able to (i) write down the joint loss in closed form, (ii) explain the dual-stream input layout and why it is necessary, and (iii) construct the full 2L × 2L structured attention mask block by block. This is the *technical* core of Series 2. Take your time.
 
@@ -72,7 +72,7 @@ Position indices in $z$ run from $0$ to $2L - 1$. Positions $[0, L)$ are the "no
 > - The diffusion logits are taken from $h_{[0:L)}$ at the masked positions.
 > - The AR logits are taken from $h_{[L:2L)}$ at every position (with the standard shift-by-one).
 
-The hidden states at the two halves are *not* the same even at unmasked positions, because each half sees a different attention pattern. We need that asymmetry - without it the two losses degenerate to the same loss.
+The hidden states at the two halves are *not* the same even at unmasked positions, because each half sees a different attention pattern. We need that asymmetry — without it the two losses degenerate to the same loss.
 
 ### 2.2 Why not just two forwards?
 
@@ -124,7 +124,7 @@ $$
 M_{\text{BC}}[i, j] \;=\; \mathbb{1}[j < i], \qquad i, j \in [L, 2L).
 $$
 
-The AR loss is computed exactly as it would be in a vanilla decoder LM - every clean query attends only to earlier clean keys.
+The AR loss is computed exactly as it would be in a vanilla decoder LM — every clean query attends only to earlier clean keys.
 
 ### 3.4 The noisy → clean quadrant ($M_{\text{OBC}}$, out-of-block clean conditioning)
 
@@ -144,7 +144,7 @@ This is a **block-strictly-lower-triangular** mask between the two halves.
 
 ### 3.5 The noisy → noisy quadrant ($M_{\text{BD}}$, block-diffusion intra-block mask)
 
-Within a single block, the noisy half does *bidirectional* attention - every masked position attends to every other position in the same block (clean or masked), but only within its block:
+Within a single block, the noisy half does *bidirectional* attention — every masked position attends to every other position in the same block (clean or masked), but only within its block:
 
 $$
 M_{\text{BD}}[i, j] \;=\; \mathbb{1}\!\left[\,b(i) = b(j)\,\right], \qquad i, j \in [0, L).

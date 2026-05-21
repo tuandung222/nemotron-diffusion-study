@@ -1,4 +1,4 @@
-# 3.4 - Linear self-speculation + LoRA drafter alignment
+# 3.4 — Linear self-speculation + LoRA drafter alignment
 
 > **Goal of this lecture.** Walk through `generate_with_prefix_cache_block_diff` (the linear self-speculation inference routine) at the code level, and then read the LoRA + LK-hybrid loss recipe that adds ~36M parameters to bump TPF from ~5 to ~6. By the end you should be able to (i) trace one self-speculation cycle through the actual code path, (ii) explain why a LoRA on `o_proj` works as a drafter-alignment tool, and (iii) modify the recipe for a different acceptance/quality trade-off.
 
@@ -62,7 +62,7 @@ Two non-obvious knobs: `threshold` and `causal_context`.
 
 ### 1.2 The return value
 
-`nfe` is "number of function evaluations" - i.e., total forward passes used to generate `out_ids`. TPF = `len(out_ids) / nfe`.
+`nfe` is "number of function evaluations" — i.e., total forward passes used to generate `out_ids`. TPF = `len(out_ids) / nfe`.
 
 A typical generation: prompt 64 tokens, output 256 tokens, threshold 0.9, block_length 32 → `nfe ≈ 50`, `TPF ≈ 256 / 50 ≈ 5.1`.
 
@@ -138,8 +138,8 @@ Three subtleties worth tracking: the **cache cloning** (§3.2), the **longest-pr
 ### 2.1 The two forwards per cycle
 
 Per cycle:
-- **One bidirectional forward** (the diffusion draft) - sees the draft block + clean prefix in KV cache.
-- **One autoregressive forward** (the AR verify) - sees the draft tokens, advances KV cache.
+- **One bidirectional forward** (the diffusion draft) — sees the draft block + clean prefix in KV cache.
+- **One autoregressive forward** (the AR verify) — sees the draft tokens, advances KV cache.
 
 This matches Lecture 2.3 §3 exactly.
 
@@ -151,7 +151,7 @@ Both forwards read the same prefix KV cache. So the cost per cycle is:
 - Draft forward incremental compute (B tokens): ~B/L of an AR forward
 - Verify forward incremental compute (B tokens): ~B/L of an AR forward
 
-For B = 32, L = 4096 (the typical context length), the per-cycle cost is ~3% of a "fresh" AR forward at the same context. Compared to 32 AR forwards (one per token), it's a ~$33/4 = 8.3\times$ speedup at full acceptance. With partial acceptance ($\mathbb{E}[m] = 6$), the realised speedup is ~$3\times$ - matching the empirical numbers.
+For B = 32, L = 4096 (the typical context length), the per-cycle cost is ~3% of a "fresh" AR forward at the same context. Compared to 32 AR forwards (one per token), it's a ~$33/4 = 8.3\times$ speedup at full acceptance. With partial acceptance ($\mathbb{E}[m] = 6$), the realised speedup is ~$3\times$ — matching the empirical numbers.
 
 ---
 
@@ -183,7 +183,7 @@ verify_cache = clone_cache(prefix_cache)
 # verify_forward writes new K/V to verify_cache
 ```
 
-The clone is shallow - the K/V tensors up to length `L_p` are shared (read-only). Only the newly written entries are copies. Memory cost per clone is one block worth of K/V (~B × num_layers × num_kv_heads × head_dim × 2 bytes × 2 for K and V), which for NLD-8B at B=32 is ~16 KB per clone. Negligible.
+The clone is shallow — the K/V tensors up to length `L_p` are shared (read-only). Only the newly written entries are copies. Memory cost per clone is one block worth of K/V (~B × num_layers × num_kv_heads × head_dim × 2 bytes × 2 for K and V), which for NLD-8B at B=32 is ~16 KB per clone. Negligible.
 
 ### 3.3 Cache cropping after commit
 
@@ -235,9 +235,9 @@ def longest_prefix_match(draft_tokens, ar_argmax, draft_confs, threshold):
 
 Two conditions for a position to be accepted:
 1. **AR-verify match.** The AR-verify's argmax at that position equals the diffusion draft. This guards against quality drops.
-2. **High confidence.** The diffusion draft itself was high-confidence. This is a secondary filter - sometimes the AR-verify matches a low-confidence diffusion draft (random chance), but committing such tokens would degrade quality.
+2. **High confidence.** The diffusion draft itself was high-confidence. This is a secondary filter — sometimes the AR-verify matches a low-confidence diffusion draft (random chance), but committing such tokens would degrade quality.
 
-The longest *contiguous* prefix that satisfies both is accepted. Position $i+1$ is not accepted if position $i$ is not - because each subsequent position depends on the previous one's commit.
+The longest *contiguous* prefix that satisfies both is accepted. Position $i+1$ is not accepted if position $i$ is not — because each subsequent position depends on the previous one's commit.
 
 ### 4.1 Why not allow non-contiguous accepts?
 
@@ -276,7 +276,7 @@ Even with the joint training, the diffusion-draft distribution and the AR-verify
 | Per-layer params | $2 \cdot 128 \cdot 4096 \cdot 1 = 1.05$ M |
 | Total LoRA params | $34 \cdot 1.05 = 35.6$ M (≈ 0.4% of base) |
 
-The choice of `o_proj` and not other matrices is deliberate. The `o_proj` is the layer that **merges** the per-head attention outputs back into the residual stream. Aligning the drafter and verifier requires aligning these merged outputs - modifying `o_proj` is the most direct route.
+The choice of `o_proj` and not other matrices is deliberate. The `o_proj` is the layer that **merges** the per-head attention outputs back into the residual stream. Aligning the drafter and verifier requires aligning these merged outputs — modifying `o_proj` is the most direct route.
 
 ### 5.2 The LK-hybrid loss
 
@@ -329,7 +329,7 @@ For practitioners deploying NLD self-speculation, the operationally important kn
 | `causal_context` | True | False only for infilling tasks |
 | LoRA adapter | None | Train + load if TPF is bottlenecked |
 
-The default settings are tuned for "open-domain chat at b=1 on B200" - the model card's headline use case. Other deployments (long-context, high-batch, code) may want different defaults.
+The default settings are tuned for "open-domain chat at b=1 on B200" — the model card's headline use case. Other deployments (long-context, high-batch, code) may want different defaults.
 
 ---
 
@@ -395,7 +395,7 @@ The NLD reference implementation handles all four correctly; if you're reading t
 
 ## 9. Exercises
 
-1. The cache-clone is "shallow" - meaning the underlying tensors are shared up to the prefix length. Sketch what happens to memory consumption over the course of a 256-token generation if the clone were *deep* instead.
+1. The cache-clone is "shallow" — meaning the underlying tensors are shared up to the prefix length. Sketch what happens to memory consumption over the course of a 256-token generation if the clone were *deep* instead.
 
 2. The accept rule requires both AR-match AND confidence ≥ threshold. What's the trade-off if we drop the confidence requirement (accept on AR-match alone)? Predict the effect on TPF and quality.
 
@@ -412,9 +412,9 @@ Solutions to (2), (4), (5) are in [Appendix B](../appendix/reading-list.md#exerc
 ## 10. Further reading
 
 - **`generate_with_prefix_cache_block_diff`** in the NLD source. Read it after this lecture.
-- **NLD Tech Report §6.2** - the LoRA + LK-hybrid loss recipe with full hyperparameters.
+- **NLD Tech Report §6.2** — the LoRA + LK-hybrid loss recipe with full hyperparameters.
 - **Speculative decoding paper** (Leviathan et al., 2023). [arXiv:2211.17192](https://arxiv.org/abs/2211.17192). The original two-model speculative decoding from which NLD's accept rule descends.
-- **EAGLE-3** (Li et al., 2024) - the strongest two-model competitor. NLD's accept rule is a simplification.
-- **PEFT (LoRA library)** docs - for the `merge_and_unload()` mechanics.
+- **EAGLE-3** (Li et al., 2024) — the strongest two-model competitor. NLD's accept rule is a simplification.
+- **PEFT (LoRA library)** docs — for the `merge_and_unload()` mechanics.
 
 Next, Lecture 3.5: quadratic self-speculation. Same idea but with $B(B+1)/2$ candidate positions per cycle instead of $B$, using a fancier mask structure to verify multiple candidates in parallel.

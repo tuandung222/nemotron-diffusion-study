@@ -1,6 +1,6 @@
 [book]
 title = "Nemotron-Labs-Diffusion Study"
-description = "A self-contained set of lecture notes and code labs covering diffusion language models, mixed AR-diffusion training, and a deep dive into NVIDIA's Nemotron-Labs-Diffusion (NLD) model family - including the VLM variant."
+description = "A self-contained set of lecture notes and code labs covering diffusion language models, mixed AR-diffusion training, and a deep dive into NVIDIA's Nemotron-Labs-Diffusion (NLD) model family — including the VLM variant."
 authors = ["tuandung222", "Devin (drafting assistant)"]
 language = "en"
 multilingual = false
@@ -46,5 +46,5 @@ line-numbers = true
 # markdown italic parser. This is the fix for "x_t" being mis-rendered
 # as "xt" because markdown consumed the underscores.
 macros = "./theme/katex-macros.txt"
-# Don't throw build errors on bad input - log + continue. Catches in CI as warnings.
+# Don't throw build errors on bad input — log + continue. Catches in CI as warnings.
 throw-on-error = false

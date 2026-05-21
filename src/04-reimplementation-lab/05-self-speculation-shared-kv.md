@@ -1,10 +1,10 @@
-# Lab 4.5 - Self-speculation with shared KV cache
+# Lab 4.5 — Self-speculation with shared KV cache
 
 > **Notebook:** [`notebooks/05-self-speculation-shared-kv.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/05-self-speculation-shared-kv.ipynb)
 >
 > **Runtime:** CPU < 90 s · GPU < 15 s · **Params:** 0.83M
 
-This lab implements the **KV cache** machinery that makes self-speculation actually fast in wall-clock. We introduce `clone()` and `crop()` operations - the two primitives NLD uses (Lecture 3.4 §3).
+This lab implements the **KV cache** machinery that makes self-speculation actually fast in wall-clock. We introduce `clone()` and `crop()` operations — the two primitives NLD uses (Lecture 3.4 §3).
 
 ## What you build
 
@@ -24,7 +24,7 @@ class LayerCache:
             self.v = torch.cat([self.v, new_v], dim=2)
 
     def clone(self):
-        '''Shallow copy - shares underlying storage. Subsequent torch.cat
+        '''Shallow copy — shares underlying storage. Subsequent torch.cat
         creates a new tensor, so the original is unaffected (copy-on-extend).'''
         new = LayerCache()
         new.k, new.v = self.k, self.v
@@ -47,7 +47,7 @@ We compare AR generation with and without the cache:
 | with-cache | 0.11 s | 459 |
 | **speedup** | **1.37×** | |
 
-The output matches exactly between the two - verifies cache correctness. Speedup is modest because the model is small and the prompt is short; at 8B params and 4K-token prompts, the speedup is 20–50×.
+The output matches exactly between the two — verifies cache correctness. Speedup is modest because the model is small and the prompt is short; at 8B params and 4K-token prompts, the speedup is 20–50×.
 
 ### Shared-cache speculation cycle
 

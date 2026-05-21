@@ -1,4 +1,4 @@
-# Lab 4.6 — VLM extension with a tiny vision encoder
+# Lab 4.6 - VLM extension with a tiny vision encoder
 
 > **Notebook:** [`notebooks/06-vlm-extension.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/06-vlm-extension.ipynb)
 >
@@ -47,7 +47,7 @@ Rules (`make_asym_dual_mask`):
 - Noisy text → all vision tokens (vision is always-attended-to).
 - Noisy text → clean text in previous blocks (M_OBC).
 - Vision ↔ vision (full attention within vision tokens).
-- **Vision → text** (any) **is forbidden** — vision is encoded independently of text context.
+- **Vision → text** (any) **is forbidden** - vision is encoded independently of text context.
 - Clean text → vision (yes, text uses vision context).
 - Clean text → clean text causal by block (M_BC).
 - Clean text → noisy text never.
@@ -58,13 +58,13 @@ The mask matrix at `L_txt=4, N_vis=2, block_size=2`:
 Layout: [noisy_text(4) | vision(2) | clean_text(4)]
 [[1 1 0 0 1 1 0 0 0 0]    ← noisy block 0
  [1 1 0 0 1 1 0 0 0 0]
- [0 0 1 1 1 1 1 1 0 0]    ← noisy block 1 — sees vision + clean block 0
+ [0 0 1 1 1 1 1 1 0 0]    ← noisy block 1 - sees vision + clean block 0
  [0 0 1 1 1 1 1 1 0 0]
- [0 0 0 0 1 1 0 0 0 0]    ← vision tokens — see only other vision tokens
+ [0 0 0 0 1 1 0 0 0 0]    ← vision tokens - see only other vision tokens
  [0 0 0 0 1 1 0 0 0 0]
- [0 0 0 0 1 1 1 1 0 0]    ← clean block 0 — sees vision + itself
+ [0 0 0 0 1 1 1 1 0 0]    ← clean block 0 - sees vision + itself
  [0 0 0 0 1 1 1 1 0 0]
- [0 0 0 0 1 1 1 1 1 1]    ← clean block 1 — sees vision + clean blocks ≤ 1
+ [0 0 0 0 1 1 1 1 1 1]    ← clean block 1 - sees vision + clean blocks ≤ 1
  [0 0 0 0 1 1 1 1 1 1]]
 ```
 
@@ -80,7 +80,7 @@ asym_mask = make_asym_dual_mask(L_txt, N_vis, block_size, device)
 logits = model(dual, img, asym_mask)
 ```
 
-The AR loss is text-only (vision tokens are skipped for AR — pedagogical simplification; NLD's AR uses vision too).
+The AR loss is text-only (vision tokens are skipped for AR - pedagogical simplification; NLD's AR uses vision too).
 
 ## What you measure
 

@@ -1,8 +1,8 @@
-# 2.3 — Self-speculation: drafting with diffusion, verifying with AR
+# 2.3 - Self-speculation: drafting with diffusion, verifying with AR
 
 > **Goal of this lecture.** Take the unified AR + diffusion model from Lecture 2.2 and use it at inference in *both* modes within a single token-generation cycle: the diffusion mode emits a long draft in one forward, the AR mode verifies it in a second forward, and the longest matching prefix is committed. The cycle is what NLD calls **self-speculation** and is the source of the 5–6× TPF numbers in the tech report. By the end you should be able to describe the cycle step by step, write the acceptance rule, and explain why a single 8B model can outperform an 8B+1B drafter setup despite using the same compute.
 
-Background assumed: Lectures 1.5 (sampling), 2.1 (motivation), 2.2 (dual-stream + structured attention mask). A working knowledge of Leviathan/Chen-style speculative decoding is useful but not strictly necessary — we re-derive the relevant bits.
+Background assumed: Lectures 1.5 (sampling), 2.1 (motivation), 2.2 (dual-stream + structured attention mask). A working knowledge of Leviathan/Chen-style speculative decoding is useful but not strictly necessary - we re-derive the relevant bits.
 
 ---
 
@@ -36,13 +36,13 @@ We describe **linear self-speculation** first (the simpler variant) and treat qu
 
 At the beginning of cycle $c$, the model has:
 
-- A *committed prefix* $y_{0:t}$ of length $t$ — these are tokens the user has either prompted with or that have been committed in earlier cycles.
+- A *committed prefix* $y_{0:t}$ of length $t$ - these are tokens the user has either prompted with or that have been committed in earlier cycles.
 - A *KV cache* for the committed prefix, stored in HBM. This KV cache was built either by the AR verify pass of the previous cycle, or by chunked prefill of the prompt.
 - A *block length* $B$ (typically 32) and a *threshold* $\tau$ (typically 0.9).
 
 The goal of cycle $c$ is to **commit at least one more token**, with the hope of committing up to $B$.
 
-### 2.2 Step 1 — draft with diffusion
+### 2.2 Step 1 - draft with diffusion
 
 Append $B$ `[MASK]` tokens to the input:
 
@@ -61,9 +61,9 @@ $$
 \hat{y}^{\text{draft}}_{t+i} \;=\; \arg\max_v \ell^{\text{draft}}_{t+i}[v], \qquad i = 1, \dots, B.
 $$
 
-We do *not* sample with the threshold — we always emit all $B$ draft tokens. The threshold check happens in the next step.
+We do *not* sample with the threshold - we always emit all $B$ draft tokens. The threshold check happens in the next step.
 
-### 2.3 Step 2 — verify with AR
+### 2.3 Step 2 - verify with AR
 
 Now run a *second forward pass* in **AR mode** on the same input, but with $\tilde{y}$ replaced by the draft:
 
@@ -73,11 +73,11 @@ $$
 
 The AR forward attends causally over the full $t + B$ length and produces logits $\ell^{\text{ar}}_{t+i}$ for $i = 0, \dots, B - 1$ (the standard shift-by-one convention).
 
-Critically, the KV cache from the committed prefix can be **reused as-is** in this forward — the AR mode's clean-prefix conditioning is identical to the diffusion mode's clean-prefix conditioning (this is enforced by the dual-stream training: see Lecture 2.2's $M_{\text{OBC}}$).
+Critically, the KV cache from the committed prefix can be **reused as-is** in this forward - the AR mode's clean-prefix conditioning is identical to the diffusion mode's clean-prefix conditioning (this is enforced by the dual-stream training: see Lecture 2.2's $M_{\text{OBC}}$).
 
-The new positions $t+1 \dots t+B$ generate their own KV cache entries during the verify forward, which we keep regardless of acceptance — we'll reuse them next cycle.
+The new positions $t+1 \dots t+B$ generate their own KV cache entries during the verify forward, which we keep regardless of acceptance - we'll reuse them next cycle.
 
-### 2.4 Step 3 — accept
+### 2.4 Step 3 - accept
 
 Walk through the draft positions left to right. Position $t+i$ is **accepted** iff:
 
@@ -87,7 +87,7 @@ $$
 
 Stop at the first rejection: commit the longest matching prefix $y_{t+1:t+m}$ where $m$ is the largest index for which all positions $t+1, \dots, t+m$ are accepted.
 
-Update state: $t \leftarrow t + m$. If $m < B$, also commit the AR-suggested correction at position $t + m + 1$ (this is the "+1 token" of speculative decoding — see Leviathan §3 for the derivation). The committed prefix grows by $m + 1$ tokens this cycle.
+Update state: $t \leftarrow t + m$. If $m < B$, also commit the AR-suggested correction at position $t + m + 1$ (this is the "+1 token" of speculative decoding - see Leviathan §3 for the derivation). The committed prefix grows by $m + 1$ tokens this cycle.
 
 ### 2.5 The whole cycle in pseudo-code
 
@@ -134,7 +134,7 @@ def linear_self_speculation_step(model, y_committed, kv_cache, B=32, tau=0.9):
     return y_new, out_verify.kv_cache
 ```
 
-> **Implementation note.** The `out_verify.kv_cache` covers the *full* `t + B` positions even when only `m` tokens are accepted. NLD's actual code keeps only the first `t + m + 1` entries — the tail is fresh-but-stale. The discard is a one-line slice; the rest of the cache is byte-for-byte reusable.
+> **Implementation note.** The `out_verify.kv_cache` covers the *full* `t + B` positions even when only `m` tokens are accepted. NLD's actual code keeps only the first `t + m + 1` entries - the tail is fresh-but-stale. The discard is a one-line slice; the rest of the cache is byte-for-byte reusable.
 
 ### 2.6 Why this works
 
@@ -146,7 +146,7 @@ Three claims, each verifiable by the reader:
 
 3. **KV-cache reuse is structurally correct.** The dual-stream training (Lecture 2.2) constrained the diffusion mode's clean-prefix attention pattern to match the AR mode's prefix attention pattern. So the KV cache the AR forward produces for positions $1, \dots, t$ is bitwise identical to the KV cache the diffusion forward would have produced for the same positions in clean mode. The cache is shareable.
 
-The third claim is the technical bedrock of self-speculation. If the dual-stream training were sloppy — for instance, if the model accidentally learned different KV representations for "clean prefix in diffusion mode" vs "clean prefix in AR mode" — then self-speculation would silently mis-acccept tokens and the output quality would degrade. **Validating that the cached KV is reusable across modes is the single most important debugging check** when reimplementing this from scratch (see Lab 4.5).
+The third claim is the technical bedrock of self-speculation. If the dual-stream training were sloppy - for instance, if the model accidentally learned different KV representations for "clean prefix in diffusion mode" vs "clean prefix in AR mode" - then self-speculation would silently mis-acccept tokens and the output quality would degrade. **Validating that the cached KV is reusable across modes is the single most important debugging check** when reimplementing this from scratch (see Lab 4.5).
 
 ---
 
@@ -206,7 +206,7 @@ Tabulated for $B = 32$:
 
 NLD's reported TPF of ≈ 6 corresponds to $\alpha \approx 0.92$, which is consistent with the model card's claim that ~92% of draft positions exceed threshold on typical workloads.
 
-> **Reality check.** TPF measured in practice often falls 10–20% below this i.i.d. model because acceptance events are *correlated* — long runs of high-confidence drafts cluster, and so do runs of low-confidence ones. The above formula is a useful first-order tool but not the ground truth.
+> **Reality check.** TPF measured in practice often falls 10–20% below this i.i.d. model because acceptance events are *correlated* - long runs of high-confidence drafts cluster, and so do runs of low-confidence ones. The above formula is a useful first-order tool but not the ground truth.
 
 ### 3.4 Why $B$ has a sweet spot
 
@@ -235,7 +235,7 @@ We give the headline:
 - Training: roughly 1B tokens (a tiny fraction of the base pretrain).
 - Loss: LK-hybrid loss (logit-KL + hidden-state regression). Closed form in NLD §3.5.
 
-The result is reported TPF jumping from ≈ 5 to ≈ 6 on math reasoning and ≈ 5.5 to ≈ 6.5 on code generation. The LoRA is **optional at inference** — you load it only when you want maximum self-speculation TPF. AR-only or diffusion-only modes don't need it.
+The result is reported TPF jumping from ≈ 5 to ≈ 6 on math reasoning and ≈ 5.5 to ≈ 6.5 on code generation. The LoRA is **optional at inference** - you load it only when you want maximum self-speculation TPF. AR-only or diffusion-only modes don't need it.
 
 We dissect the LoRA training pipeline in Lecture 3.4.
 
@@ -304,7 +304,7 @@ If you reimplement this from scratch (Lab 4.5), expect to hit:
 
 3. **Threshold applied to the wrong distribution.** The threshold $\tau$ should apply to the AR verifier's confidence, not the diffusion drafter's. If you accidentally apply it to the drafter's distribution, you get a self-consistency check that's weaker than the AR check, and quality degrades.
 
-4. **Forgetting to discard partially-accepted tail.** When `m < B`, positions $t+m+1, \dots, t+B$ in the verify KV cache are *fresh but stale* — they were generated under an input that won't match the next cycle's prefix. You must slice the cache to length $t + m + 1$ before continuing. NLD's code explicitly does this; if you forget, the next cycle's verify forward sees an inconsistent cache and produces garbage.
+4. **Forgetting to discard partially-accepted tail.** When `m < B`, positions $t+m+1, \dots, t+B$ in the verify KV cache are *fresh but stale* - they were generated under an input that won't match the next cycle's prefix. You must slice the cache to length $t + m + 1$ before continuing. NLD's code explicitly does this; if you forget, the next cycle's verify forward sees an inconsistent cache and produces garbage.
 
 All four are caught by a single end-to-end correctness test: run self-speculation against AR-only on a fixed prompt and verify the outputs are identical at $\tau = 1.0$ (where self-speculation degenerates to AR-only because nothing meets the threshold).
 
@@ -316,7 +316,7 @@ All four are caught by a single end-to-end correctness test: run self-speculatio
 
 2. Suppose you have a workload where the per-position acceptance probability $\alpha_i$ varies across positions (e.g., higher at function-call boundaries, lower at identifier positions). Modify the TPF formula in §3.3 to handle this. Does the formula still saturate?
 
-3. Write the structured attention mask for a self-speculation cycle in matrix form. Hint: it should look like two stacked block-causal masks of size $(t + B) \times (t + B)$ — one for the diffusion draft forward, one for the AR verify forward — and they should agree on the clean-prefix region.
+3. Write the structured attention mask for a self-speculation cycle in matrix form. Hint: it should look like two stacked block-causal masks of size $(t + B) \times (t + B)$ - one for the diffusion draft forward, one for the AR verify forward - and they should agree on the clean-prefix region.
 
 4. Implement the linear self-speculation loop in PyTorch using only the model's forward function. Verify (i) bitwise reproducibility across runs with fixed seeds, (ii) that the output matches AR-only at $\tau = 1.0$.
 
@@ -334,4 +334,4 @@ Solutions to (1), (3), (5) are in [Appendix B](../appendix/reading-list.md#exerc
 - **Block Diffusion** (Arriola et al., 2024). [arXiv:2503.09573](https://arxiv.org/abs/2503.09573). Their §5.3 is the first place the idea of "diffusion drafts + AR verify" appears in a unified model.
 - **Nemotron-Labs-Diffusion Tech Report** (Fu et al., 2026). [PDF](https://d1qx31qr3h6wln.cloudfront.net/publications/Nemotron_Diffusion_Tech_Report_v1.pdf). §4 (linear self-speculation), §5 (quadratic self-speculation), Tables 4–6 (benchmarks).
 
-Next: Lecture 2.4, where we put self-speculation in context against MTP, EAGLE, Medusa, and pure block-diffusion. After that: 2.5 — how close to the theoretical speed-of-light does NLD get on actual hardware.
+Next: Lecture 2.4, where we put self-speculation in context against MTP, EAGLE, Medusa, and pure block-diffusion. After that: 2.5 - how close to the theoretical speed-of-light does NLD get on actual hardware.

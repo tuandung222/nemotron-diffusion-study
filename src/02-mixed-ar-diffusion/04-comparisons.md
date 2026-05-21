@@ -1,4 +1,4 @@
-# 2.4 — Comparisons: self-speculation vs MTP, EAGLE, Medusa, block-diffusion
+# 2.4 - Comparisons: self-speculation vs MTP, EAGLE, Medusa, block-diffusion
 
 > **Goal of this lecture.** Place mixed AR-diffusion (specifically NLD's self-speculation cycle) in its competitive landscape. By the end you should be able to (i) explain in 30 seconds the difference between self-speculation and each of MTP, EAGLE-1/2/3, Medusa, and pure block-diffusion, (ii) predict when each approach wins, and (iii) identify the failure modes of each.
 
@@ -17,10 +17,10 @@ Cross-product:
 
 | Source of candidates | No verifier | Single-forward verifier |
 |---|---|---|
-| **Separate drafter** | — | Speculative decoding (Leviathan; EAGLE-1/2/3; Medusa-style with separate heads) |
+| **Separate drafter** | - | Speculative decoding (Leviathan; EAGLE-1/2/3; Medusa-style with separate heads) |
 | **Multiple LM heads** | Medusa (multi-token) | MTP (multi-token prediction) |
 | **Bidirectional / diffusion** | Pure block-diffusion (LLaDA, MDLM, SDAR) | **Self-speculation (NLD)** |
-| **Self with multi-mode** | — | **Self-speculation (NLD)** |
+| **Self with multi-mode** | - | **Self-speculation (NLD)** |
 
 Five approaches, mapped to their structural choices. Let's walk through each.
 
@@ -42,7 +42,7 @@ Five approaches, mapped to their structural choices. Let's walk through each.
 
 - Each head sees the same hidden state and so produces *correlated* mistakes: when head 1 is uncertain, heads 2 through $k$ are usually also uncertain at the same position. Acceptance falls off fast at $k > 3$.
 - The training cost scales with $k$ (you need $k$ separate label tensors per batch).
-- Quality on hard reasoning evals (MATH, code) is consistently 0.5–1 point below the equivalent AR-only model — the heads compete for capacity at the final-layer hidden state.
+- Quality on hard reasoning evals (MATH, code) is consistently 0.5–1 point below the equivalent AR-only model - the heads compete for capacity at the final-layer hidden state.
 
 **TPF.** ≈ 2–3 at $k = 3$, with diminishing returns past that.
 
@@ -51,11 +51,11 @@ Five approaches, mapped to their structural choices. Let's walk through each.
 - MTP: $k$ separate heads, each predicting one future position from the same hidden state.
 - Self-speculation: a single head, but applied $B$ times under bidirectional attention to a block of `[MASK]` positions.
 
-NLD explicitly characterises itself in §2 of the tech report as **"MTP without the extra heads"** — the diffusion mode gives you the same multi-token-per-forward capability as MTP, but the prediction comes from running the same head over multiple positions with a different attention pattern rather than running multiple heads at the same position.
+NLD explicitly characterises itself in §2 of the tech report as **"MTP without the extra heads"** - the diffusion mode gives you the same multi-token-per-forward capability as MTP, but the prediction comes from running the same head over multiple positions with a different attention pattern rather than running multiple heads at the same position.
 
 This has two consequences:
 
-1. **NLD's drafts are not correlated in the way MTP's are.** Each masked position in NLD's draft attends to all the others bidirectionally, so the draft is *globally consistent* across positions in the block. MTP's drafts are not — each head independently produces a top-1 for its position.
+1. **NLD's drafts are not correlated in the way MTP's are.** Each masked position in NLD's draft attends to all the others bidirectionally, so the draft is *globally consistent* across positions in the block. MTP's drafts are not - each head independently produces a top-1 for its position.
 
 2. **NLD doesn't pay the AR-head-capacity-competition cost.** The diffusion drafts and AR predictions share the same LM head; there's no "training" of separate heads.
 
@@ -63,7 +63,7 @@ This has two consequences:
 
 ## 3. EAGLE-1, EAGLE-2, EAGLE-3
 
-**Idea.** A specialised drafter model — typically 1B parameters on top of an 8B verifier — that takes the verifier's *intermediate hidden states* as inputs and emits draft tokens. The drafter is trained per-target: a different drafter for each verifier model.
+**Idea.** A specialised drafter model - typically 1B parameters on top of an 8B verifier - that takes the verifier's *intermediate hidden states* as inputs and emits draft tokens. The drafter is trained per-target: a different drafter for each verifier model.
 
 **Variants.**
 
@@ -81,7 +81,7 @@ This has two consequences:
 
 **Weaknesses.**
 
-- **Drafter is a second weight load.** At batch 1, the drafter forward is ~25% of a verifier forward in wall-clock — non-trivial.
+- **Drafter is a second weight load.** At batch 1, the drafter forward is ~25% of a verifier forward in wall-clock - non-trivial.
 - **Drafter must be trained per target.** A new base model means a new EAGLE drafter. This is a meaningful operational cost.
 - **Drafter is capacity-limited.** Even at 1B params, the drafter's distribution is less accurate than the 8B verifier's, capping $\alpha$.
 - **Tree branching is finicky.** EAGLE-3's tree-attention machinery adds significant code complexity for a small TPF gain.

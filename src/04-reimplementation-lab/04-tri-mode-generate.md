@@ -1,4 +1,4 @@
-# Lab 4.4 — Tri-mode `generate()`
+# Lab 4.4 - Tri-mode `generate()`
 
 > **Notebook:** [`notebooks/04-tri-mode-generate.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/04-tri-mode-generate.ipynb)
 >
@@ -32,7 +32,7 @@ The notebook produces a comparison table:
 | block_diffusion | 5 | 6.40 | 0.03 | 1,509 |
 | self_speculation | 64 | 0.50 | 0.30 | 166 |
 
-**Interpretation.** Block-diffusion has the best TPF and wall-clock here because the model is well-trained on the joint loss; the threshold is permissive (0.3) so the accept rate is high. Self-speculation is *slower* — this is honest pedagogy: at this tiny scale, the draft and AR-verify rarely agree, so almost every cycle falls back to the AR-only fallback (commit 1 token per 2 forwards). In production NLD-8B the drafter and verifier are aligned via LoRA (Lecture 3.4), giving TPF ≈ 6.
+**Interpretation.** Block-diffusion has the best TPF and wall-clock here because the model is well-trained on the joint loss; the threshold is permissive (0.3) so the accept rate is high. Self-speculation is *slower* - this is honest pedagogy: at this tiny scale, the draft and AR-verify rarely agree, so almost every cycle falls back to the AR-only fallback (commit 1 token per 2 forwards). In production NLD-8B the drafter and verifier are aligned via LoRA (Lecture 3.4), giving TPF ≈ 6.
 
 ## Why self-speculation underperforms here
 

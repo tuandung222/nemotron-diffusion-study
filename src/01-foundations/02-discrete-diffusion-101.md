@@ -1,4 +1,4 @@
-# 1.2 — Discrete diffusion 101: D3PM and absorbing-state diffusion
+# 1.2 - Discrete diffusion 101: D3PM and absorbing-state diffusion
 
 > **Goal of this lecture.** Build up the math of *discrete* diffusion processes from scratch, with enough rigour that the simplified masked-LM losses in the next lecture stop looking like magic. By the end, you should be able to:
 >
@@ -14,7 +14,7 @@ Notation: discrete tokens take values in a vocabulary $\mathcal{V}$ with $|\math
 
 ## 1. Why "discrete" diffusion needs its own theory
 
-You've probably seen the continuous (image) version: choose noise $\epsilon \sim \mathcal{N}(0, I)$, define $x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\, \epsilon$, train a network to predict $\epsilon$, sample by running the reverse SDE. That entire machinery presupposes that "noise" is a Gaussian perturbation in $\mathbb{R}^d$ — which is meaningless on a token vocabulary. There's no natural metric that says "the word *cat* is close to the word *dog*"; the embedding space induces one, but that's a *learned* embedding, not something the diffusion process can rely on.
+You've probably seen the continuous (image) version: choose noise $\epsilon \sim \mathcal{N}(0, I)$, define $x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\, \epsilon$, train a network to predict $\epsilon$, sample by running the reverse SDE. That entire machinery presupposes that "noise" is a Gaussian perturbation in $\mathbb{R}^d$ - which is meaningless on a token vocabulary. There's no natural metric that says "the word *cat* is close to the word *dog*"; the embedding space induces one, but that's a *learned* embedding, not something the diffusion process can rely on.
 
 The right move is to give up on Gaussian noise and design a **stochastic Markov chain over the vocabulary itself**:
 
@@ -44,7 +44,7 @@ $$
 q(x_t \mid x_0) \;=\; \text{Cat}\!\left(x_t;\, \bar{Q}_t\, x_0\right), \quad \bar{Q}_t \;\triangleq\; Q_t Q_{t-1} \cdots Q_1.
 $$
 
-We can also compute the posterior over $x_{t-1}$ given $(x_0, x_t)$ — which we'll need for the ELBO:
+We can also compute the posterior over $x_{t-1}$ given $(x_0, x_t)$ - which we'll need for the ELBO:
 
 $$
 q(x_{t-1} \mid x_t, x_0) \;\propto\; q(x_t \mid x_{t-1}) \, q(x_{t-1} \mid x_0)
@@ -87,7 +87,7 @@ $$
 p_\theta(x_{t-1} \mid x_t) \;\approx\; q(x_{t-1} \mid x_t).
 $$
 
-Since we only have $q(x_{t-1} \mid x_t, x_0)$ in closed form (not $q(x_{t-1} \mid x_t)$), we **parameterize** the reverse by having the network predict $x_0$ from $x_t$ — call this prediction $\tilde{p}_\theta(x_0 \mid x_t)$ — and then plug it into the posterior:
+Since we only have $q(x_{t-1} \mid x_t, x_0)$ in closed form (not $q(x_{t-1} \mid x_t)$), we **parameterize** the reverse by having the network predict $x_0$ from $x_t$ - call this prediction $\tilde{p}_\theta(x_0 \mid x_t)$ - and then plug it into the posterior:
 
 $$
 p_\theta(x_{t-1} \mid x_t) \;=\; \sum_{x_0 \in \mathcal{V}} q(x_{t-1} \mid x_t, x_0) \, \tilde{p}_\theta(x_0 \mid x_t).
@@ -109,7 +109,7 @@ $$
 
 The prior term $L_T$ vanishes when $q(x_T \mid x_0)$ converges to a fixed reference (uniform, or all-masked) by design. The reconstruction $L_0$ and per-step KLs $L_{t-1}$ are the meaningful losses.
 
-For continuous diffusion this is where one usually invokes "$\epsilon$-prediction" and a simplified loss. For discrete diffusion, **the same simplification falls out almost trivially** — and that's where the modern simplified losses come from.
+For continuous diffusion this is where one usually invokes "$\epsilon$-prediction" and a simplified loss. For discrete diffusion, **the same simplification falls out almost trivially** - and that's where the modern simplified losses come from.
 
 ### 3.2 Auxiliary $x_0$-prediction loss (D3PM's "$L_\lambda$")
 
@@ -125,7 +125,7 @@ $$
 \mathcal{L}_{\text{D3PM}}(\theta) \;=\; \mathcal{L}_{\text{vlb}}(\theta) \;+\; \lambda \cdot \mathcal{L}_{\text{aux}}(\theta),
 $$
 
-with $\lambda \sim 10^{-2}$ in the original paper. In practice almost every follow-up paper dropped the VLB term entirely and kept only the auxiliary loss with a *t*-dependent weighting — that's the "modern masked diffusion loss" we'll derive in §4.
+with $\lambda \sim 10^{-2}$ in the original paper. In practice almost every follow-up paper dropped the VLB term entirely and kept only the auxiliary loss with a *t*-dependent weighting - that's the "modern masked diffusion loss" we'll derive in §4.
 
 ---
 
@@ -143,7 +143,7 @@ $$
 q(\mathbf{x}_t \mid \mathbf{x}_0) \;=\; \prod_i \Big[ (1-\bar\beta_t)\, \mathbb{1}[x_t^i = x_0^i] + \bar\beta_t\, \mathbb{1}[x_t^i = \texttt{[MASK]}] \Big].
 $$
 
-So $x_t^i$ is either the original $x_0^i$ (with probability $1 - \bar\beta_t$) or `[MASK]` (with probability $\bar\beta_t$). **There's no continuous interpolation, no Gaussian noise — just random masking.**
+So $x_t^i$ is either the original $x_0^i$ (with probability $1 - \bar\beta_t$) or `[MASK]` (with probability $\bar\beta_t$). **There's no continuous interpolation, no Gaussian noise - just random masking.**
 
 The posterior $q(x_{t-1} \mid x_t, x_0)$ is also clean:
 
@@ -166,12 +166,12 @@ where $w_t = \frac{\bar\beta_{t-1}}{\bar\beta_t \cdot (\bar\beta_t - \bar\beta_{
 
 **This is just masked language modeling**, but with two twists:
 
-1. **The mask ratio $\bar\beta_t$ is random per batch** — drawn from the noise schedule rather than fixed at 15% as in BERT.
+1. **The mask ratio $\bar\beta_t$ is random per batch** - drawn from the noise schedule rather than fixed at 15% as in BERT.
 2. **There is a $t$-dependent weight $w_t$** on each masked position.
 
 That's it. Once you've understood §1–§3, you've earned the right to think of absorbing diffusion as *masked LM with a random mask ratio and a principled per-step weighting*. This is the conceptual punchline of the entire chapter.
 
-> **Practical consequence.** You can take any pretrained encoder-only masked LM (BERT, RoBERTa) or any decoder-only LM, and turn it into a discrete diffusion LM by changing the training loop to (a) sample a random mask ratio per batch, (b) mask that fraction of positions, (c) compute weighted cross-entropy on the masked positions. There is no new architecture required at training time. We'll see that NLD-VLM-8B does exactly this — it inherits its backbone weights from `Ministral3-8B` (a standard AR decoder LM) and continual-pretrains with the absorbing-diffusion loss layered on top.
+> **Practical consequence.** You can take any pretrained encoder-only masked LM (BERT, RoBERTa) or any decoder-only LM, and turn it into a discrete diffusion LM by changing the training loop to (a) sample a random mask ratio per batch, (b) mask that fraction of positions, (c) compute weighted cross-entropy on the masked positions. There is no new architecture required at training time. We'll see that NLD-VLM-8B does exactly this - it inherits its backbone weights from `Ministral3-8B` (a standard AR decoder LM) and continual-pretrains with the absorbing-diffusion loss layered on top.
 
 ---
 
@@ -191,9 +191,9 @@ $$
 \mathcal{L}_{\text{ct}}(\theta) \;=\; \mathbb{E}_{\mathbf{x}_0, t \sim \mathcal{U}[0,1]}\!\left[\, \frac{\bar\beta'(t)}{\bar\beta(t)} \sum_i \mathbb{1}[x_t^i = \texttt{[MASK]}] \cdot \big(-\log \tilde{p}_\theta(x_0^i \mid \mathbf{x}_t)\big)\, \right],
 $$
 
-where $\bar\beta'(t)$ is the derivative of the schedule. With the linear schedule $\bar\beta(t) = t$, we have $\bar\beta'(t) / \bar\beta(t) = 1/t$ — the famous "$1/t$ reweighting" you see in MDLM and downstream papers.
+where $\bar\beta'(t)$ is the derivative of the schedule. With the linear schedule $\bar\beta(t) = t$, we have $\bar\beta'(t) / \bar\beta(t) = 1/t$ - the famous "$1/t$ reweighting" you see in MDLM and downstream papers.
 
-> **NLD config check.** Open the [config.json of `nvidia/Nemotron-Labs-Diffusion-VLM-8B`](https://huggingface.co/nvidia/Nemotron-Labs-Diffusion-VLM-8B/blob/main/config.json). The diffusion paradigm is `"dlm_type": "llada"` — i.e. continuous-time absorbing diffusion with the simplified MDLM-style loss. You'll see references to a "$1/t$ reweighting" later in the paper that is exactly the $\bar\beta'(t)/\bar\beta(t)$ factor above.
+> **NLD config check.** Open the [config.json of `nvidia/Nemotron-Labs-Diffusion-VLM-8B`](https://huggingface.co/nvidia/Nemotron-Labs-Diffusion-VLM-8B/blob/main/config.json). The diffusion paradigm is `"dlm_type": "llada"` - i.e. continuous-time absorbing diffusion with the simplified MDLM-style loss. You'll see references to a "$1/t$ reweighting" later in the paper that is exactly the $\bar\beta'(t)/\bar\beta(t)$ factor above.
 
 ### 5.1 Why continuous time matters
 
@@ -201,7 +201,7 @@ Three reasons:
 
 1. **No timestep hyperparameter.** You sample $t \sim \mathcal{U}[0,1]$ instead of $t \in \{1, \dots, 1000\}$. One fewer schedule to design.
 2. **Cleaner loss expression.** The $1/t$ factor is now a property of the schedule, not a discrete sum.
-3. **Continuous-time inference can use any number of denoising steps** without retraining — you sample timesteps $t_1 > t_2 > \dots > t_K$ from a chosen inference schedule, and the model still works.
+3. **Continuous-time inference can use any number of denoising steps** without retraining - you sample timesteps $t_1 > t_2 > \dots > t_K$ from a chosen inference schedule, and the model still works.
 
 The downside is that the loss has higher variance for small $t$ (the $1/t$ blows up), which motivates the "global loss averaging" trick we'll see in Series 2: NLD averages per-token losses globally across the batch rather than per-sample, which damps the $1/t$ spikes.
 
@@ -227,7 +227,7 @@ backprop
 **Two important points** that often trip up people coming from AR:
 
 1. **The model is the same architecture as a decoder LM.** No special "diffusion head", no extra timestep embedding (the timestep enters only through the loss weighting and the mask ratio). NLD goes one step further and uses *literally the same weights* as a pre-existing AR LM (Ministral3-8B). The diffusion-vs-AR distinction at training time is entirely about (a) what positions are masked and (b) the attention mask.
-2. **The attention mask is NOT causal.** Within a diffusion forward pass, every position can attend to every other position — including the future. This is essential, because predicting a masked position from the prefix alone is exactly the AR objective (which we still keep, in mixed AR-diffusion), but predicting it from *bidirectional context* is what makes diffusion useful. In Series 2 we'll see how NLD combines a causal stream and a bidirectional stream in one forward.
+2. **The attention mask is NOT causal.** Within a diffusion forward pass, every position can attend to every other position - including the future. This is essential, because predicting a masked position from the prefix alone is exactly the AR objective (which we still keep, in mixed AR-diffusion), but predicting it from *bidirectional context* is what makes diffusion useful. In Series 2 we'll see how NLD combines a causal stream and a bidirectional stream in one forward.
 
 If you're picturing this as "BERT-style masked LM with a random mask ratio and a $1/t$ weight" you're correct, modulo the schedule. The conceptual gap from BERT to a diffusion LM is much narrower than the gap from AR LM to either.
 
@@ -255,7 +255,7 @@ Two questions arise immediately:
 
 1. **How many denoising steps $K$ do we need?** In principle $K = T$ (the training horizon) recovers the analytic posterior; in practice $K$ can be much smaller (like $K=8$ to $K=32$). The trade-off: smaller $K$ = faster, larger $K$ = closer to the "true" posterior and usually better quality. This is precisely the TPF vs accuracy curve we saw in lecture 1.1.
 
-2. **How do we pick which positions to commit at each step?** This is the **sampler**, and it's where most of the modern engineering happens. The default "confidence-based" sampler — commit positions whose top-1 probability exceeds a threshold $\tau$ — is what NLD uses by default. We'll see in lecture 1.5 that better samplers (learned, ancestral, remasking) can substantially close the gap to the speed-of-light upper bound.
+2. **How do we pick which positions to commit at each step?** This is the **sampler**, and it's where most of the modern engineering happens. The default "confidence-based" sampler - commit positions whose top-1 probability exceeds a threshold $\tau$ - is what NLD uses by default. We'll see in lecture 1.5 that better samplers (learned, ancestral, remasking) can substantially close the gap to the speed-of-light upper bound.
 
 > **NLD inference defaults.** `block_length = 32`, `threshold = 0.9`, `steps = 512`. Translation: at each forward pass, the model is denoising a block of up to 32 masked positions, and commits any whose top-1 confidence is $\geq 0.9$. We'll see this code in Series 3.
 
@@ -270,7 +270,7 @@ After this lecture you should be able to:
 3. **Describe inference.** Iteratively unmask positions in $K$ denoising steps using a sampler over confidences.
 4. **Recognize the architecture cost.** Same transformer as an AR LM. The only architectural change at training time is the attention mask (bidirectional within the diffusion forward); at inference time the algorithm changes but the model graph doesn't.
 
-The next lecture (1.3) walks through three specific instantiations of this framework — **SEDD**, **MDLM**, and **LLaDA** — to make the connections to specific modern papers explicit, and to highlight the design choices that NLD inherits.
+The next lecture (1.3) walks through three specific instantiations of this framework - **SEDD**, **MDLM**, and **LLaDA** - to make the connections to specific modern papers explicit, and to highlight the design choices that NLD inherits.
 
 ---
 

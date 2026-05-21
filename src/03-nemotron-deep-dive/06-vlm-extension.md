@@ -1,6 +1,6 @@
-# 3.6 — VLM extension: Pixtral encoder + asymmetric dual-stream
+# 3.6 - VLM extension: Pixtral encoder + asymmetric dual-stream
 
-> **Goal of this lecture.** Read the VLM-specific code in `modeling_nemotron_labs_diffusion_vlm.py` — the Pixtral encoder, the 2-layer MLP projector with 2×2 spatial merge, the `_embed_with_vision` helper, and the "asymmetric dual-stream" that puts vision tokens *only* in the clean view. By the end you should be able to (i) trace an image from raw bytes to LM input tokens, (ii) explain why vision tokens skip the noisy view, and (iii) recover the "exact merge" initialization recipe that bootstraps from a vision-language base.
+> **Goal of this lecture.** Read the VLM-specific code in `modeling_nemotron_labs_diffusion_vlm.py` - the Pixtral encoder, the 2-layer MLP projector with 2×2 spatial merge, the `_embed_with_vision` helper, and the "asymmetric dual-stream" that puts vision tokens *only* in the clean view. By the end you should be able to (i) trace an image from raw bytes to LM input tokens, (ii) explain why vision tokens skip the noisy view, and (iii) recover the "exact merge" initialization recipe that bootstraps from a vision-language base.
 
 Background assumed: Series 1 (foundations) + Series 2 (mixed AR-diff) + Lectures 3.1–3.5 of Series 3 (NLD code-level). Familiarity with at least one VLM architecture (LLaVA, Pixtral, Qwen2-VL) for context.
 
@@ -19,7 +19,7 @@ NLD-VLM-8B is structurally the **same 8B text decoder + a Pixtral-style vision t
     ↓ (last hidden, dim 1024)
 [Multimodal projector, 2-layer MLP + 2×2 spatial merge]
     ↓ (dim 4096, one token per merged patch)
-[NLD-8B decoder (text-only) — UNCHANGED]
+[NLD-8B decoder (text-only) - UNCHANGED]
 ```
 
 Total parameters:
@@ -31,7 +31,7 @@ Total parameters:
 | NLD-8B decoder (shared) | 8B |
 | **Total VLM** | **~8.5B** |
 
-The vision overhead is < 7% of total parameters. The NLD-8B decoder remains tri-mode (AR / diffusion / self-spec) and the Pixtral encoder is a fixed module — no diffusion magic on the vision side.
+The vision overhead is < 7% of total parameters. The NLD-8B decoder remains tri-mode (AR / diffusion / self-spec) and the Pixtral encoder is a fixed module - no diffusion magic on the vision side.
 
 ---
 
@@ -57,10 +57,10 @@ Key facts:
 
 - **Patch size 14.** Each 14×14 RGB patch becomes a 1024-dim token.
 - **Image size up to 1540×1540.** Smaller images are kept at native resolution (no aspect-ratio distortion); larger images are tiled with the patches-of-images approach used by Pixtral. The maximum number of patches per image is $\lceil 1540/14 \rceil^2 = 110^2 = 12{,}100$.
-- **24 layers, 16 heads, head_dim 64.** Standard Pixtral-style. The encoder is bidirectional (no causal mask) — vision data has no notion of "future" tokens.
+- **24 layers, 16 heads, head_dim 64.** Standard Pixtral-style. The encoder is bidirectional (no causal mask) - vision data has no notion of "future" tokens.
 - **RoPE on positions.** Patches receive 2D RoPE based on (row, col) within the image. `rope_theta = 10000` (the standard ViT-style theta, not the LM's 1e6).
 
-The encoder is initialized from **Pixtral 12B's vision tower**, which has the exact same shape. This initialization is critical — the bottom is on Lecture 3.6 §5.
+The encoder is initialized from **Pixtral 12B's vision tower**, which has the exact same shape. This initialization is critical - the bottom is on Lecture 3.6 §5.
 
 ---
 
@@ -114,11 +114,11 @@ Output: 1 token × 4096 = 4096 floats (passes through Linear_1)
 
 This reduces the per-image LM context from 12,100 to ~3,000 tokens. The exact reduction is 4× because each merge collapses 4 patches.
 
-The merge is **deterministic and structural** — no learnable weights in the merge itself. It's just a reshape: `(H, W, 1024) → (H/2, W/2, 4096)`.
+The merge is **deterministic and structural** - no learnable weights in the merge itself. It's just a reshape: `(H, W, 1024) → (H/2, W/2, 4096)`.
 
 ### 3.2 Why 4096 dim? (matching LM hidden)
 
-The LM's input embedding is 4096-d. The projector's output is 4096-d. So projected vision tokens are inserted into the LM's input sequence as if they were word embeddings — no further transformation needed.
+The LM's input embedding is 4096-d. The projector's output is 4096-d. So projected vision tokens are inserted into the LM's input sequence as if they were word embeddings - no further transformation needed.
 
 A 2-layer MLP (4096 → 4096) is enough to absorb the cross-modal distribution shift. Pixtral and Ministral3 (the LM base) were trained jointly via a similar projector, so the initialization makes the projector's job easier (Lecture 3.6 §5).
 
@@ -136,7 +136,7 @@ Here's where NLD-VLM's design becomes interesting. Recall (Lecture 3.2) that the
 
 **Naive approach:** dual-stream the vision tokens too. So if there are 1000 vision tokens and 100 text tokens, the dual stream has length $2 \cdot 1100 = 2200$.
 
-**Problem:** vision tokens are *never masked*. The diffusion process applies to text tokens only — masking image patches is nonsensical (we can't denoise pixels). So the noisy-view's image positions are *identical* to the clean-view's image positions. We'd be doubling vision-token compute for no benefit.
+**Problem:** vision tokens are *never masked*. The diffusion process applies to text tokens only - masking image patches is nonsensical (we can't denoise pixels). So the noisy-view's image positions are *identical* to the clean-view's image positions. We'd be doubling vision-token compute for no benefit.
 
 **NLD's solution:** the asymmetric dual-stream. Vision tokens appear **only in the clean view**, not the noisy view.
 
@@ -152,7 +152,7 @@ content:  t1 t2 ... t_L     V1 V2 ... V_Nvis t1 t2 ... t_L
 
 Total length: $L_\text{txt} + N_\text{vis} + L_\text{txt} = 2L_\text{txt} + N_\text{vis}$.
 
-For a typical image-conversation: $L_\text{txt} = 500$, $N_\text{vis} = 3000$, dual-stream length = $2 \cdot 500 + 3000 = 4000$. The symmetric naive approach would have given $2 \cdot 3500 = 7000$ tokens — almost 2× more.
+For a typical image-conversation: $L_\text{txt} = 500$, $N_\text{vis} = 3000$, dual-stream length = $2 \cdot 500 + 3000 = 4000$. The symmetric naive approach would have given $2 \cdot 3500 = 7000$ tokens - almost 2× more.
 
 ### 4.1 The attention mask under asymmetric dual-stream
 
@@ -170,13 +170,13 @@ is_vis_q   = (q_idx >= L_txt) & (q_idx < L_txt + N_vis)   # vision tokens
 
 The structured-mask rules adapt:
 
-- **Noisy text → noisy text (M_BD):** same as before — bidirectional within block.
-- **Noisy text → clean text (M_OBC):** same as before — offset-block-causal.
+- **Noisy text → noisy text (M_BD):** same as before - bidirectional within block.
+- **Noisy text → clean text (M_OBC):** same as before - offset-block-causal.
 - **Noisy text → clean vision:** **always allowed** (no block-causal constraint). Vision tokens are the "always-attend-to" conditioning.
 - **Clean text → clean text (M_BC):** block-causal as before.
 - **Clean text → clean vision:** **always allowed**.
 - **Clean vision → clean vision:** **bidirectional within image** (image-internal attention).
-- **Clean vision → clean text:** **prohibited** (vision tokens should not attend to text — image encoding is independent of the conversation).
+- **Clean vision → clean text:** **prohibited** (vision tokens should not attend to text - image encoding is independent of the conversation).
 
 The "always-allowed" rules for noisy/clean-text to clean-vision implement the "vision is context for everything" intuition. The "prohibited" rule from vision to text ensures the vision tokens' representations don't depend on the chat (which would defeat caching).
 
@@ -201,7 +201,7 @@ When training NLD-VLM from scratch, the initialization recipe is:
 3. **Projector weights ← `mistralai/Pixtral-12B-2409`** (its multimodal projector only).
 4. **Image-token embedding ← average of all word embeddings.** Specifically, the new `<image>` token in the vocabulary (id 131072) gets its embedding initialized to the mean of all 131072 word embeddings.
 
-The phrase "exact merge" refers to: the Pixtral-12B's vision encoder is paired with Ministral3's LM. NLD-8B is trained from Ministral3. So **the Pixtral vision tower was originally trained against the LM that NLD-8B initialized from**. The Pixtral projector's outputs land in approximately the right neighborhood of Ministral3's input embedding space — and therefore approximately the right neighborhood of NLD-8B's input embedding space (since NLD-8B starts from Ministral3 and only differentially updates).
+The phrase "exact merge" refers to: the Pixtral-12B's vision encoder is paired with Ministral3's LM. NLD-8B is trained from Ministral3. So **the Pixtral vision tower was originally trained against the LM that NLD-8B initialized from**. The Pixtral projector's outputs land in approximately the right neighborhood of Ministral3's input embedding space - and therefore approximately the right neighborhood of NLD-8B's input embedding space (since NLD-8B starts from Ministral3 and only differentially updates).
 
 The "exact" word emphasizes that the encoder + projector + LM were *literally trained as one stack* (Pixtral 12B), then transplanted intact. This is a stronger initialization than the typical VLM recipe (CLIP encoder + random projector + LLM).
 
@@ -216,7 +216,7 @@ For "exact merge" to work, the shapes must align:
 - Ministral3 LM input: 4096-d.
 - NLD-8B (starts from Ministral3): 4096-d.
 
-So Pixtral's projector → Ministral3 LM is dim-compatible, and Ministral3 → NLD-8B is dim-compatible. All shapes match. The actual numeric values don't need to align perfectly — they just need to be in the right neighborhood — but the architectural shapes must match.
+So Pixtral's projector → Ministral3 LM is dim-compatible, and Ministral3 → NLD-8B is dim-compatible. All shapes match. The actual numeric values don't need to align perfectly - they just need to be in the right neighborhood - but the architectural shapes must match.
 
 ### 5.2 Counter-example: dim mismatch
 
@@ -256,11 +256,11 @@ def _embed_with_vision(self, input_ids, pixel_values, image_sizes):
 
 The key idea: the input `input_ids` contains an `<image>` placeholder token for each vision-token position (one placeholder per merged patch). The embedding lookup turns these into the LM's embedding for `<image>`, then we *overwrite* those positions with the projected vision features.
 
-This pattern allows the LM to handle text and vision uniformly in subsequent layers — the vision tokens are just specially-initialized "input embeddings" that flow through the rest of the decoder unchanged.
+This pattern allows the LM to handle text and vision uniformly in subsequent layers - the vision tokens are just specially-initialized "input embeddings" that flow through the rest of the decoder unchanged.
 
 ### 6.1 Image-token ID
 
-The `<image>` token is id `131072` (the last slot in the 131073-vocab). Special tokens are also handled uniformly: BOS, EOS, MASK, IMAGE all have specific ids, and the LM treats them all as "input embeddings" — but only MASK is touched by the diffusion process.
+The `<image>` token is id `131072` (the last slot in the 131073-vocab). Special tokens are also handled uniformly: BOS, EOS, MASK, IMAGE all have specific ids, and the LM treats them all as "input embeddings" - but only MASK is touched by the diffusion process.
 
 ### 6.2 Multi-image support
 
@@ -292,7 +292,7 @@ Self-spec works identically to text-only. The only difference: the prefix KV cac
 
 At per-cycle inference, the cache is read once (~1 HBM load) and the draft / verify forwards each take a per-block fraction. So the per-cycle wall-clock at VLM is roughly the same as text-only, *if* the cache is in-HBM (which it usually is for short conversations).
 
-For very long conversations or many cached images, KV-cache-bandwidth becomes a real cost. NLD-VLM's tech report Table 9 shows TPF dropping from 5.5 (text-only) to 4.5 (VLM with one 1024×1024 image) — a meaningful reduction attributable to the extra prefix.
+For very long conversations or many cached images, KV-cache-bandwidth becomes a real cost. NLD-VLM's tech report Table 9 shows TPF dropping from 5.5 (text-only) to 4.5 (VLM with one 1024×1024 image) - a meaningful reduction attributable to the extra prefix.
 
 ---
 
@@ -300,9 +300,9 @@ For very long conversations or many cached images, KV-cache-bandwidth becomes a 
 
 The Pixtral encoder is trained in two phases during the VLM stage:
 
-**Phase 1 — vision adapter warm-up (~5B tokens).** The LM is frozen; only the projector and the new `<image>` embedding train. Loss is the joint AR + diffusion. Goal: align the projector's output to the LM's input embedding distribution.
+**Phase 1 - vision adapter warm-up (~5B tokens).** The LM is frozen; only the projector and the new `<image>` embedding train. Loss is the joint AR + diffusion. Goal: align the projector's output to the LM's input embedding distribution.
 
-**Phase 2 — full VLM training (~70B tokens).** The LM, projector, and vision encoder are all updated. The joint loss continues. The encoder's learning rate is set 10× lower than the LM's to avoid destroying the pretrained Pixtral encoder.
+**Phase 2 - full VLM training (~70B tokens).** The LM, projector, and vision encoder are all updated. The joint loss continues. The encoder's learning rate is set 10× lower than the LM's to avoid destroying the pretrained Pixtral encoder.
 
 Phase 1 is short and cheap (~500 H100-hours). Phase 2 is longer (~5000 H100-hours).
 
@@ -380,9 +380,9 @@ Solutions to (3), (5) are in [Appendix B](../appendix/reading-list.md#exercise-s
 ## 11. Further reading
 
 - **HF model card**: https://huggingface.co/nvidia/Nemotron-Labs-Diffusion-VLM-8B
-- **Pixtral 12B paper** (Mistral AI, 2024). https://mistral.ai/news/pixtral-12b/ — for the encoder's design.
-- **Llava-1.5 paper** (Liu et al., 2024) — the "linear projector" VLM architecture that Pixtral and NLD-VLM both build on.
-- **NLD Tech Report §5** — full VLM training pipeline including the exact-merge init and Phase-1/Phase-2 split.
-- **Multimodal projector ablations** in the NLD repo's `multimodal_projector.py` (separate file) — alternative projector designs.
+- **Pixtral 12B paper** (Mistral AI, 2024). https://mistral.ai/news/pixtral-12b/ - for the encoder's design.
+- **Llava-1.5 paper** (Liu et al., 2024) - the "linear projector" VLM architecture that Pixtral and NLD-VLM both build on.
+- **NLD Tech Report §5** - full VLM training pipeline including the exact-merge init and Phase-1/Phase-2 split.
+- **Multimodal projector ablations** in the NLD repo's `multimodal_projector.py` (separate file) - alternative projector designs.
 
 Next, Lecture 3.7: benchmarks. We'll read NLD's published numbers against the SOL framework from Lecture 2.5 and identify which numbers are SOL-limited vs algorithm-limited.

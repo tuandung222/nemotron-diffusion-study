@@ -1,8 +1,8 @@
-# 1.3 — Masked Diffusion Models: SEDD, MDLM, LLaDA
+# 1.3 - Masked Diffusion Models: SEDD, MDLM, LLaDA
 
 > **Goal of this lecture.** Walk through the three "modern" papers that turn the D3PM theory of lecture 1.2 into actually-working language models: **SEDD** (Lou et al., 2024), **MDLM** (Sahoo et al., 2024), and **LLaDA** (Nie et al., 2024). Each contributes a small but important refinement, and together they define the recipe that NLD inherits.
 
-This lecture is mostly about **simplification**. Each successive paper drops something from D3PM until the loss collapses to a single line of PyTorch. By the end you should be comfortable saying *"masked diffusion training is just a one-line weighted cross-entropy with a random mask ratio"* — and know exactly which factors are doing the work.
+This lecture is mostly about **simplification**. Each successive paper drops something from D3PM until the loss collapses to a single line of PyTorch. By the end you should be comfortable saying *"masked diffusion training is just a one-line weighted cross-entropy with a random mask ratio"* - and know exactly which factors are doing the work.
 
 ---
 
@@ -15,7 +15,7 @@ This lecture is mostly about **simplification**. Each successive paper drops som
 | **MDLM** | 2024 | Shows that the absorbing-state D3PM ELBO, in continuous time, collapses to a **single, weight-free cross-entropy on masked positions**. Same accuracy as SEDD with a much simpler loss. |
 | **LLaDA** | 2024 | Scales MDLM to 8B parameters, trains on a tokenized corpus comparable to AR LLMs, and shows competitive zero-shot benchmarks on reasoning. **This is the recipe NLD inherits.** |
 
-After this lecture we'll have the absorbing-state, continuous-time, MDLM-style loss in our pocket — and we'll be ready to discuss block-wise factorization in lecture 1.4.
+After this lecture we'll have the absorbing-state, continuous-time, MDLM-style loss in our pocket - and we'll be ready to discuss block-wise factorization in lecture 1.4.
 
 ---
 
@@ -39,7 +39,7 @@ You can skip SEDD as a practitioner; we mention it because it set the bar that M
 
 ## 3. MDLM: the simplification that broke everything open
 
-Sahoo, Arriola, et al. (2024) — "Simple and Effective Masked Diffusion Language Models" — proved that you don't need score entropy or any of SEDD's machinery to get the same accuracy. You just need three things:
+Sahoo, Arriola, et al. (2024) - "Simple and Effective Masked Diffusion Language Models" - proved that you don't need score entropy or any of SEDD's machinery to get the same accuracy. You just need three things:
 
 1. **Absorbing-state forward process** (a.k.a. masking).
 2. **Continuous-time formulation** ($t \in [0, 1]$).
@@ -100,20 +100,20 @@ The $1/t$ factor is sometimes called the **diffusion ELBO weighting**, and it sh
 
 The $1/t$ factor has a downside: when $t$ is small (say $t = 0.01$), the weight is 100. Most batches will have a few examples with $t \approx 0$ and they will dominate the gradient. This causes:
 
-1. **High gradient variance** — training is noisier than AR.
-2. **A long training tail** — the loss spends a lot of time fitting the rare high-weight examples.
+1. **High gradient variance** - training is noisier than AR.
+2. **A long training tail** - the loss spends a lot of time fitting the rare high-weight examples.
 
-MDLM addresses (1) with **time-conditioning bias correction** (a learned per-$t$ bias on the logits) and uses a slightly higher learning rate. **Global loss averaging** (averaging cross-entropies over all *tokens* in the batch instead of all *examples*) is a different fix that NLD uses — we'll see it in Series 2.
+MDLM addresses (1) with **time-conditioning bias correction** (a learned per-$t$ bias on the logits) and uses a slightly higher learning rate. **Global loss averaging** (averaging cross-entropies over all *tokens* in the batch instead of all *examples*) is a different fix that NLD uses - we'll see it in Series 2.
 
 ### 3.3 What about the per-step KLs?
 
-Doesn't the ELBO have additional KL terms $L_{t-1}$? Yes — and in the absorbing case the simplification of §4 of lecture 1.2 shows that *summing* the KLs across all $t$ gives exactly the integral form above (modulo discretization). The continuous-time MDLM loss *is* the ELBO, just rewritten as a single expectation. No information is lost.
+Doesn't the ELBO have additional KL terms $L_{t-1}$? Yes - and in the absorbing case the simplification of §4 of lecture 1.2 shows that *summing* the KLs across all $t$ gives exactly the integral form above (modulo discretization). The continuous-time MDLM loss *is* the ELBO, just rewritten as a single expectation. No information is lost.
 
 ---
 
 ## 4. LLaDA: scaling MDLM to 8B and beyond
 
-Nie et al. (2024) — "Large Language Diffusion Models" — applied MDLM at LLM scale (1B and 8B parameters), trained from scratch on a token corpus comparable to standard pretraining datasets, and reported the first set of zero-shot benchmarks that placed diffusion LMs in the same conversation as 8B AR LLMs.
+Nie et al. (2024) - "Large Language Diffusion Models" - applied MDLM at LLM scale (1B and 8B parameters), trained from scratch on a token corpus comparable to standard pretraining datasets, and reported the first set of zero-shot benchmarks that placed diffusion LMs in the same conversation as 8B AR LLMs.
 
 Key practical contributions:
 
@@ -205,7 +205,7 @@ Let's check that the MDLM loss does what we think it does.
 A: No positions are masked. The cross-entropy sum is empty, the loss is 0. The $1/t$ factor is a $0/0$ that becomes irrelevant in practice (multiplied by 0 number of terms). In code, you clamp $t \geq 10^{-3}$ to avoid numerical issues, and you sample $t$ from a distribution that doesn't put much mass at 0 (uniform is fine because the expected number of masked positions is $L \cdot t$, which is small for small $t$).
 
 **Q: What happens when $t \to 1$?**
-A: Every position is masked; the model is being asked to generate the entire sequence from scratch with no observed context (except the prompt, in a conditional generation setting). This is the hardest regime and contributes the most stable, well-conditioned gradient signal — but with weight $1/t \to 1$, not particularly upweighted. The bulk of the training signal comes from intermediate $t$.
+A: Every position is masked; the model is being asked to generate the entire sequence from scratch with no observed context (except the prompt, in a conditional generation setting). This is the hardest regime and contributes the most stable, well-conditioned gradient signal - but with weight $1/t \to 1$, not particularly upweighted. The bulk of the training signal comes from intermediate $t$.
 
 **Q: Why isn't this just BERT?**
 A: BERT uses a fixed mask ratio (15%), no $1/t$ reweighting, and the encoder is bidirectional but trained jointly with NSP. MDLM uses a *random* mask ratio per example $\sim \mathcal{U}[0,1]$, the $1/t$ reweighting, and trains a decoder-style transformer with bidirectional attention. The model architectures can be identical; the *training distribution* is the actual difference.
@@ -242,7 +242,7 @@ The Series 4 notebooks will do this from scratch in a more controlled setting.
 - The realization that **the architecture is the same as an AR LM**; only the attention mask and the loss formula change.
 - Reference to where each of these fits in NLD's config: `dlm_type: llada`, the loss inherited from MDLM, the tokenizer from Ministral3.
 
-The next lecture explains why "full-sequence diffusion" — denoising all $L$ positions of a long sequence in parallel — is actually a bad idea for long contexts, and how block-wise factorization fixes it. This is the conceptual step that lets diffusion LMs reuse KV caches and that makes self-speculation possible.
+The next lecture explains why "full-sequence diffusion" - denoising all $L$ positions of a long sequence in parallel - is actually a bad idea for long contexts, and how block-wise factorization fixes it. This is the conceptual step that lets diffusion LMs reuse KV caches and that makes self-speculation possible.
 
 ---
 
@@ -251,7 +251,7 @@ The next lecture explains why "full-sequence diffusion" — denoising all $L$ po
 - Lou, A., Meng, C., Ermon, S. *Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution*. ICML 2024. **The SEDD paper.**
 - Sahoo, S., Arriola, M., Schiff, Y., Gokaslan, A., Marroquin, E., Chiu, J. T., Rush, A., Kuleshov, V. *Simple and Effective Masked Diffusion Language Models*. NeurIPS 2024. **The MDLM paper.** §3 has the loss derivation, §4 the empirical comparison to SEDD.
 - Nie, S., Zhu, F., Du, C., Pang, T., Liu, Q., Zeng, G., Lin, M., Li, C. *Large Language Diffusion Models*. arXiv:2502.09992, 2024. **The LLaDA paper.** §3 is the inference recipe, §6 is the benchmarks.
-- Ho, J., Jain, A., Abbeel, P. *Denoising Diffusion Probabilistic Models*. NeurIPS 2020. The continuous-image analog — useful as a comparison; you'll see the same $\beta$-VDM weight argument.
+- Ho, J., Jain, A., Abbeel, P. *Denoising Diffusion Probabilistic Models*. NeurIPS 2020. The continuous-image analog - useful as a comparison; you'll see the same $\beta$-VDM weight argument.
 
 ## Exercises
 
@@ -259,10 +259,10 @@ The next lecture explains why "full-sequence diffusion" — denoising all $L$ po
 
 2. **Variance of the $1/t$-weighted loss.** Show analytically that, for a fixed batch of sequences and noise levels drawn uniformly, the variance of the per-example MDLM loss has a $1/t$ singularity. Argue why this motivates "averaging over tokens in the batch" rather than "averaging over examples".
 
-3. **MDLM ↔ AR equivalence at $t = 1$.** Show that when $t$ is sampled from a degenerate distribution concentrated at $t = 1$ (every position masked), the MDLM loss reduces to maximum-likelihood training of a generic categorical predictor — i.e. just MLE. Why is this the "easiest" case from the gradient-variance perspective?
+3. **MDLM ↔ AR equivalence at $t = 1$.** Show that when $t$ is sampled from a degenerate distribution concentrated at $t = 1$ (every position masked), the MDLM loss reduces to maximum-likelihood training of a generic categorical predictor - i.e. just MLE. Why is this the "easiest" case from the gradient-variance perspective?
 
 4. **Why bidirectional attention at training time?** Argue why MDLM *requires* bidirectional attention (or at least, why pure causal attention is suboptimal). What would happen if you trained MDLM with causal attention? *(Hint: think about the conditioning available to predict each masked position.)*
 
-5. **Reading LLaDA Table 4.** Open the LLaDA paper and read Table 4 (benchmark comparison). Identify two benchmarks where LLaDA outperforms LLaMA-2-7B and two where it loses by a wide margin. Propose a hypothesis for *why* — i.e. what is it about the benchmark that favors AR or diffusion?
+5. **Reading LLaDA Table 4.** Open the LLaDA paper and read Table 4 (benchmark comparison). Identify two benchmarks where LLaDA outperforms LLaMA-2-7B and two where it loses by a wide margin. Propose a hypothesis for *why* - i.e. what is it about the benchmark that favors AR or diffusion?
 
 Sketched solutions are in [Appendix B](../appendix/reading-list.md#exercise-solutions).

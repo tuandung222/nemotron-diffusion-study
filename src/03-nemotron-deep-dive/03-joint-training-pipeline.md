@@ -1,6 +1,6 @@
-# 3.3 — The joint training pipeline: curriculum + DP-rank varying masking
+# 3.3 - The joint training pipeline: curriculum + DP-rank varying masking
 
-> **Goal of this lecture.** Reconstruct from the tech report and the released training code how NLD-8B is actually trained — the two-stage curriculum, the DP-rank-varying masking schedule, the global loss averaging, and the loss-balancing tricks that keep the AR and diffusion gradients compatible. By the end you should be able to: (i) write a one-page recipe describing the production training pipeline, (ii) explain why each design choice matters, and (iii) anticipate which choices are robust and which need re-tuning when fine-tuning.
+> **Goal of this lecture.** Reconstruct from the tech report and the released training code how NLD-8B is actually trained - the two-stage curriculum, the DP-rank-varying masking schedule, the global loss averaging, and the loss-balancing tricks that keep the AR and diffusion gradients compatible. By the end you should be able to: (i) write a one-page recipe describing the production training pipeline, (ii) explain why each design choice matters, and (iii) anticipate which choices are robust and which need re-tuning when fine-tuning.
 
 Background assumed: Lecture 2.2 (joint loss + dual-stream), Lecture 3.1 (config), Lecture 3.2 (mask modes), basic familiarity with distributed training (DP/FSDP, gradient accumulation).
 
@@ -32,7 +32,7 @@ NLD's tech report Table 2 ablates four training strategies:
 
 Strategy (b) wins on quality and TPF. The key insight: **start joint training from a well-trained AR base**, so the diffusion objective adapts the AR weights minimally rather than co-training from scratch.
 
-Strategy (a) is roughly 18 quality points worse — joint pretraining from scratch is data-inefficient because the model has to learn both AR and diffusion priors simultaneously without strong supervision on either.
+Strategy (a) is roughly 18 quality points worse - joint pretraining from scratch is data-inefficient because the model has to learn both AR and diffusion priors simultaneously without strong supervision on either.
 
 The implication is operational: if you want to NLD-ify your own AR base, you don't need a special "diffusion-friendly" base. Any well-trained Mistral-style decoder works.
 
@@ -50,9 +50,9 @@ The mask ratio schedule changes from Stage 1's uniform $U(0.1, 0.9)$ to a **cosi
 
 The trainer calls one of three "forward process" methods, depending on the variant:
 
-- `forward_process(input_ids, eps, block_size, loss_mask)` — standard MDLM-style mask + denoise. Line 631.
-- `forward_process_complementary(input_ids, ...)` — adds the complementary-mask trick. Line 494.
-- `forward_process_exp(input_ids, ...)` — experimental, used for ablations. Line 684.
+- `forward_process(input_ids, eps, block_size, loss_mask)` - standard MDLM-style mask + denoise. Line 631.
+- `forward_process_complementary(input_ids, ...)` - adds the complementary-mask trick. Line 494.
+- `forward_process_exp(input_ids, ...)` - experimental, used for ablations. Line 684.
 
 The production model uses `forward_process_complementary` (since the VLM config sets `complementary_mask: true`).
 
@@ -67,9 +67,9 @@ def forward_process(self, input_ids, eps=1e-3,
     Apply random masking to construct the noisy view of the dual-stream input.
 
     Returns:
-      noisy_input:        (B, L) — input_ids with some positions replaced by MASK
-      input_to_predict:   (B, L) — the original tokens at the masked positions
-      mask_indices:       (B, L) — bool mask of which positions were masked
+      noisy_input:        (B, L) - input_ids with some positions replaced by MASK
+      input_to_predict:   (B, L) - the original tokens at the masked positions
+      mask_indices:       (B, L) - bool mask of which positions were masked
     """
     B, L = input_ids.shape
 
@@ -107,11 +107,11 @@ $$
 L_\text{diff} = \frac{1}{2}\bigl[\, L_\text{diff}^{\text{view}_1}(M) + L_\text{diff}^{\text{view}_2}(\neg M) \,\bigr]
 $$
 
-In code, this is implemented by *splitting the batch in half* — half of each batch uses mask $M$, the other half uses $\neg M$. The gradient is averaged over the full batch. No extra compute beyond what a normal batch would cost.
+In code, this is implemented by *splitting the batch in half* - half of each batch uses mask $M$, the other half uses $\neg M$. The gradient is averaged over the full batch. No extra compute beyond what a normal batch would cost.
 
 The effect: **every position in the batch contributes to the diffusion loss in some view**, doubling the effective gradient signal per training step.
 
-The tech-report ablation (Table 3) shows ~1.5 points improvement on MATH from this trick alone — a meaningful gain for one line of code.
+The tech-report ablation (Table 3) shows ~1.5 points improvement on MATH from this trick alone - a meaningful gain for one line of code.
 
 ---
 
@@ -156,7 +156,7 @@ This decouples the loss magnitudes from the gradient magnitudes, which makes the
 
 Standard cosine LR with linear warmup. Stage 1: peak LR $3 \times 10^{-4}$, warmup 2000 steps, total 300K steps. Stage 2: peak LR $1 \times 10^{-4}$, warmup 500 steps, total 50K steps.
 
-The lower LR in Stage 2 reflects that it's instruction tuning rather than pretraining — the gradient signal is noisier and more targeted, so a smaller step is appropriate.
+The lower LR in Stage 2 reflects that it's instruction tuning rather than pretraining - the gradient signal is noisier and more targeted, so a smaller step is appropriate.
 
 ---
 
@@ -179,7 +179,7 @@ The tech-report Table 3 shows ~1.0 point improvement on MATH from `dp_varying_ma
 
 ### 4.2 What if DP world size = 1?
 
-`dp_varying_mask_ratio` is a no-op when the world size is 1 (single-GPU). It only matters for distributed training. The released checkpoint was trained with DP world size = 64 (8 nodes × 8 H100s), so the ratio spectrum is $\{0.1, 0.115, 0.13, ..., 0.9\}$ — a 64-point grid.
+`dp_varying_mask_ratio` is a no-op when the world size is 1 (single-GPU). It only matters for distributed training. The released checkpoint was trained with DP world size = 64 (8 nodes × 8 H100s), so the ratio spectrum is $\{0.1, 0.115, 0.13, ..., 0.9\}$ - a 64-point grid.
 
 In code (within `forward_process`):
 
@@ -296,7 +296,7 @@ In NLD's dual-stream forward, the structured attention mask **routes** the two l
 - The diffusion loss reads through M_BD (intra-block bidirectional) and M_OBC (offset-block-causal to clean).
 - The AR loss reads through `autoregressive` mask (token-causal).
 
-These routings activate different *slices* of the same Q/K/V/O projections. The gradients are therefore approximately decoupled — they update overlapping but not identical projection subspaces.
+These routings activate different *slices* of the same Q/K/V/O projections. The gradients are therefore approximately decoupled - they update overlapping but not identical projection subspaces.
 
 This is a deep architectural insight: **the mask structure decouples gradients that would otherwise interfere**, even though the parameters are shared. The tech-report §4.2 makes this argument explicitly.
 
@@ -343,10 +343,10 @@ Solutions to (1), (4) are in [Appendix B](../appendix/reading-list.md#exercise-s
 
 ## 10. Further reading
 
-- **NLD Tech Report, §4** — the full training pipeline description.
-- **`forward_process_complementary`** at line 494 of `modeling_nemotron_labs_diffusion_vlm.py` — the actual implementation.
-- **Tulu-mix-3** (Lambert et al., 2024) — the SFT dataset used in Stage 2.
-- **YaRN context-extension training** (Peng et al., 2023) — for how the 16K → 262K context extension is done jointly with the joint loss.
-- **MDLM (Sahoo et al., 2024)** §4 — the original mask-then-denoise loss that NLD's diffusion side derives from.
+- **NLD Tech Report, §4** - the full training pipeline description.
+- **`forward_process_complementary`** at line 494 of `modeling_nemotron_labs_diffusion_vlm.py` - the actual implementation.
+- **Tulu-mix-3** (Lambert et al., 2024) - the SFT dataset used in Stage 2.
+- **YaRN context-extension training** (Peng et al., 2023) - for how the 16K → 262K context extension is done jointly with the joint loss.
+- **MDLM (Sahoo et al., 2024)** §4 - the original mask-then-denoise loss that NLD's diffusion side derives from.
 
 Next, Lecture 3.4: the linear self-speculation pipeline at code level, plus the LoRA drafter alignment with LK-hybrid loss.

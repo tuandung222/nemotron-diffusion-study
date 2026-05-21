@@ -1,12 +1,12 @@
-# 1.4 — Block diffusion: from full-sequence to block-wise denoising
+# 1.4 - Block diffusion: from full-sequence to block-wise denoising
 
-> **Goal of this lecture.** Understand why "diffuse the whole sequence" — the LLaDA/MDLM default — is the wrong default for long-context generation, and how **block diffusion** (Arriola et al., 2024; SDAR, 2025) restores KV-cache reuse, enables left-to-right streaming, and is the immediate predecessor of NLD's training/inference setup.
+> **Goal of this lecture.** Understand why "diffuse the whole sequence" - the LLaDA/MDLM default - is the wrong default for long-context generation, and how **block diffusion** (Arriola et al., 2024; SDAR, 2025) restores KV-cache reuse, enables left-to-right streaming, and is the immediate predecessor of NLD's training/inference setup.
 
 By the end you should be able to explain three things to a colleague:
 
-1. **The KV-cache problem with full-sequence diffusion** — why it asymptotically wastes the same compute that an AR LM saves.
-2. **The block-diffusion factorization** — how splitting the sequence into causal *blocks* of bidirectional content gives you the best of both modes.
-3. **The block-mask machinery** — concretely, what `compute_block_mask` (NLD's function) constructs, and why it's the natural intersection of AR's causal mask and MDM's full bidirectional mask.
+1. **The KV-cache problem with full-sequence diffusion** - why it asymptotically wastes the same compute that an AR LM saves.
+2. **The block-diffusion factorization** - how splitting the sequence into causal *blocks* of bidirectional content gives you the best of both modes.
+3. **The block-mask machinery** - concretely, what `compute_block_mask` (NLD's function) constructs, and why it's the natural intersection of AR's causal mask and MDM's full bidirectional mask.
 
 This lecture is *the* prerequisite for understanding Series 2 (the dual-stream attention machinery) and Series 3 (NLD code internals). Take your time.
 
@@ -28,7 +28,7 @@ Two costs:
 1. **Every forward pass attends over the full sequence** of length $L_p + L_{\text{out}}$. Quadratic in $L_{\text{out}}$.
 2. **No KV-cache reuse.** Between iterations, *some positions get committed* and become "clean", but the *values* of the clean positions are not the same as they were the iteration before (they changed from `[MASK]` to a real token). So the K/V projections of those positions change, and we cannot reuse them.
 
-In the AR baseline, each new token only causes $O(L)$ new work (one new query attending over $L$ cached keys), so generating an entire sequence is $O(L^2)$ total. With full-sequence diffusion at $K$ iterations, the cost is $K \cdot O(L^2)$ — strictly *worse* than AR per token.
+In the AR baseline, each new token only causes $O(L)$ new work (one new query attending over $L$ cached keys), so generating an entire sequence is $O(L^2)$ total. With full-sequence diffusion at $K$ iterations, the cost is $K \cdot O(L^2)$ - strictly *worse* than AR per token.
 
 The only thing saving full-sequence diffusion is that $K \ll L$ in practice. With LLaDA at TPF $\approx 4$ and a 1024-token completion, $K \approx 256$; AR would do 1024 forward passes, but each one is cheaper because of the KV cache. The arithmetic doesn't obviously favor either approach until you measure both wall clock and quality.
 
@@ -63,7 +63,7 @@ This is the **block-diffusion factorization**, due to Arriola, Sahoo, Gokaslan, 
 
 Per block:
 
-- Forward pass attends over (prompt + committed prefix + current block) — length grows by $B$ between blocks, not by 1.
+- Forward pass attends over (prompt + committed prefix + current block) - length grows by $B$ between blocks, not by 1.
 - KV cache of the prompt and all *previously committed* blocks **is reusable** because those positions are stable across the block's diffusion steps.
 - Number of forward passes within a block: $K_B \ll B$ (say $K_B = 8$ to generate a 32-token block).
 
@@ -73,7 +73,7 @@ $$
 \text{cost} \;\approx\; \sum_{m=1}^M K_B \cdot (L_p + (m-1) B + B) \;=\; K_B \cdot \left( M L_p + \frac{M(M+1)}{2} B \right).
 $$
 
-Compare to AR: $L_{\text{out}} \cdot L_p + \frac{L_{\text{out}}(L_{\text{out}}+1)}{2}$ (the second term is the quadratic over the completion). Plug in $B = 32, K_B = 8, L_{\text{out}} = 1024$ and the block-diffusion cost is *less than half* the AR cost — and you've committed many tokens per forward pass.
+Compare to AR: $L_{\text{out}} \cdot L_p + \frac{L_{\text{out}}(L_{\text{out}}+1)}{2}$ (the second term is the quadratic over the completion). Plug in $B = 32, K_B = 8, L_{\text{out}} = 1024$ and the block-diffusion cost is *less than half* the AR cost - and you've committed many tokens per forward pass.
 
 ### 2.2 The TPF arithmetic
 
@@ -165,7 +165,7 @@ The Arriola paper (Fig. 5) does an ablation: $B = 4$ to $B = 32$ are all reasona
 
 You can adapt the MDLM training loop to block diffusion in two ways:
 
-### Option A — Per-block independent noise
+### Option A - Per-block independent noise
 
 For each example:
 
@@ -174,9 +174,9 @@ For each example:
 3. Forward through the model with the block-diffusion attention mask.
 4. Compute MDLM-style loss on the masked positions of block $m$.
 
-This precisely matches the factorization $p(\mathbf{y}) = \prod_m p(\mathbf{y}_{(m)} \mid \mathbf{y}_{(<m)})$ — each training example only conditions one block on the rest.
+This precisely matches the factorization $p(\mathbf{y}) = \prod_m p(\mathbf{y}_{(m)} \mid \mathbf{y}_{(<m)})$ - each training example only conditions one block on the rest.
 
-### Option B — All-blocks-simultaneously noise
+### Option B - All-blocks-simultaneously noise
 
 For each example:
 
@@ -198,7 +198,7 @@ In code:
 t = sample_t_for_rank(rank=dist.get_rank(), step=global_step)
 ```
 
-This is a small empirical trick — Series 2 has the detailed treatment when we get to global loss averaging. For now just note it exists.
+This is a small empirical trick - Series 2 has the detailed treatment when we get to global loss averaging. For now just note it exists.
 
 ---
 
@@ -228,7 +228,7 @@ def block_diffusion_generate(model, prompt, L_out, B, K_per_block, sampler, thre
             if all(xt[i] != MASK for i in range(block_start, block_end)):
                 break
 
-        # Block m is done — flush its KVs to the cache and move on
+        # Block m is done - flush its KVs to the cache and move on
         kv_cache.commit_block(block_start, block_end)
 
     return xt[L_p:]
@@ -236,9 +236,9 @@ def block_diffusion_generate(model, prompt, L_out, B, K_per_block, sampler, thre
 
 Key points:
 
-1. **KV cache is reused across blocks** — only the *current* block's positions get reprocessed in each iteration.
-2. **Early stopping per block** — if the sampler commits all positions in a block before $K_{\text{per block}}$ steps, the loop exits.
-3. **Sampler is parameterizable** — confidence threshold, ancestral sampling, learned sampler, all plug in here. Lecture 1.5.
+1. **KV cache is reused across blocks** - only the *current* block's positions get reprocessed in each iteration.
+2. **Early stopping per block** - if the sampler commits all positions in a block before $K_{\text{per block}}$ steps, the loop exits.
+3. **Sampler is parameterizable** - confidence threshold, ancestral sampling, learned sampler, all plug in here. Lecture 1.5.
 
 This pattern is the basis of every modern block-diffusion LM serving stack (NLD, SDAR, Dream-7B). vLLM's diffusion-LM support implements approximately this loop with paged attention for the KV cache.
 
@@ -254,7 +254,7 @@ That is:
 - AR coupling (Series 2) contributes: the dual-stream input layout, the additional AR loss, the ability to switch modes at inference.
 - Self-speculation (Series 2) contributes: the drafter/verifier mechanism on top of the shared backbone.
 
-Every one of those layers is purely additive — you can ablate it and recover the previous-tier model.
+Every one of those layers is purely additive - you can ablate it and recover the previous-tier model.
 
 **Conceptual NLD = AR + α · block-diffusion-LLaDA.** Same backbone, two losses (joint), three inference modes (mask choice).
 

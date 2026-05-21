@@ -1,4 +1,4 @@
-# 3.5 — Quadratic self-speculation + FlexAttention
+# 3.5 - Quadratic self-speculation + FlexAttention
 
 > **Goal of this lecture.** Walk through `sbd_inference_diffusion_quadratic` (NLD's "quadratic" self-speculation mode) at the code level. Quadratic self-spec expands the draft from $B = 32$ candidate positions to $B(B+1)/2 = 528$ candidate positions per cycle, using a custom FlexAttention mask, and bumps TPF from ~6 (linear) to ~8 (quadratic). By the end you should be able to: (i) explain why "quadratic" is the right name, (ii) reconstruct the position-id and attention-mask layout from the code, and (iii) reason about when quadratic vs linear self-spec is the right choice.
 
@@ -10,7 +10,7 @@ References: `sbd_inference_diffusion_quadratic` at line 1140 of `modeling_nemotr
 
 ## 1. The intuition: try more drafts in parallel
 
-Linear self-spec drafts $B$ positions per cycle and commits the longest accepted prefix. If the average accepted prefix is $\mathbb{E}[m] = 6$, you "waste" $B - m = 26$ positions per cycle — they were drafted but rejected because the verifier disagreed at some earlier position.
+Linear self-spec drafts $B$ positions per cycle and commits the longest accepted prefix. If the average accepted prefix is $\mathbb{E}[m] = 6$, you "waste" $B - m = 26$ positions per cycle - they were drafted but rejected because the verifier disagreed at some earlier position.
 
 What if instead of drafting just *one* candidate per position, we drafted *multiple* candidates and let the verifier pick the best? That's the quadratic self-spec idea: at each of the $B$ positions, instead of drafting one token conditioned on its left neighbours' drafts, draft a *block* of candidates.
 
@@ -36,7 +36,7 @@ But quadratic cost in WHAT? Two metrics:
 - **FLOPs per cycle.** Quadratic forward sees $B^2/2$ sequence positions instead of $B$. So the per-cycle FLOPs are ~$B/2$ times larger than linear self-spec. For $B = 32$, that's ~16× more FLOPs per cycle.
 - **HBM bytes per cycle.** Still ~1× (the cache is read once); the extra positions write to the activation buffer but not back to HBM in the forward direction.
 
-So quadratic self-spec is **compute-heavy but memory-light**. It only makes sense when you have spare compute, i.e., when you're memory-bound. At batch 1 on B200, you're heavily memory-bound — so the extra compute is "free" (the GPU was idle anyway). At batch 256, the extra compute is not free — and quadratic self-spec is actually slower than linear.
+So quadratic self-spec is **compute-heavy but memory-light**. It only makes sense when you have spare compute, i.e., when you're memory-bound. At batch 1 on B200, you're heavily memory-bound - so the extra compute is "free" (the GPU was idle anyway). At batch 256, the extra compute is not free - and quadratic self-spec is actually slower than linear.
 
 The tech report confirms: quadratic self-spec wins on **b=1 latency** at the cost of being neutral or slightly worse at high batch.
 
@@ -125,14 +125,14 @@ else:
 
 This is the candidate expansion. Trace it:
 
-- Input: `draft_input_ids` of shape `(B_batch, block_length)` — the linear-style drafts from a previous cycle.
+- Input: `draft_input_ids` of shape `(B_batch, block_length)` - the linear-style drafts from a previous cycle.
 - Reshape to `(B_batch, block_length, 1)`.
 - Concatenate `(B_batch, block_length, block_length)` of mask tokens → `(B_batch, block_length, block_length+1)`.
 - Flatten to `(B_batch, block_length × (block_length+1))`.
 
 So per position $i = 0, 1, ..., B-1$, we now have $B+1$ tokens: the linear draft token at position $i$, followed by $B$ mask tokens. The total length per batch is $B(B+1) = 32 \cdot 33 = 1056$.
 
-Wait — the tech report says $B(B+1)/2 = 528$ candidates. Where's the factor of 2?
+Wait - the tech report says $B(B+1)/2 = 528$ candidates. Where's the factor of 2?
 
 The factor of 2 comes from the fact that the *total* sequence length is $B(B+1)$, but each position only attends to $B(B+1)/2$ positions on average (the lower triangle of the candidate matrix). So compute-wise it's quadratic in $B$, but the sequence representation is $B(B+1)$ tokens.
 
@@ -225,7 +225,7 @@ So quadratic is still slightly better, but the LoRA route is simpler. NLD's reco
 
 ## 5. Wall-clock vs FLOPs
 
-A note on the trade-off: quadratic self-spec is FLOP-heavy. For B = 32, the quadratic forward processes 1056 noisy positions vs 32 for linear self-spec — about 33× more positions.
+A note on the trade-off: quadratic self-spec is FLOP-heavy. For B = 32, the quadratic forward processes 1056 noisy positions vs 32 for linear self-spec - about 33× more positions.
 
 But because the GPU is memory-bound at b=1, the wall-clock cost is not 33× more. The forward time is dominated by HBM access (the model weight load), which is independent of the number of positions processed (as long as everything fits in SRAM).
 
@@ -358,8 +358,8 @@ Solutions to (2), (3) are in [Appendix B](../appendix/reading-list.md#exercise-s
 ## 11. Further reading
 
 - **`sbd_inference_diffusion_quadratic`** at line 1140 of the modeling file. Read it after this lecture.
-- **NLD Tech Report §6.3** — full quadratic self-spec description, including the ablation that shows when it pays off.
-- **FlexAttention reference** — for the mask construction. The quadratic self-spec FlexAttention mask is one of the more complex examples in the wild.
+- **NLD Tech Report §6.3** - full quadratic self-spec description, including the ablation that shows when it pays off.
+- **FlexAttention reference** - for the mask construction. The quadratic self-spec FlexAttention mask is one of the more complex examples in the wild.
 - **Speculative decoding survey** (Xia et al., 2024). [arXiv:2401.07851](https://arxiv.org/abs/2401.07851). For the broader landscape of "multi-candidate" speculative decoding.
 
 Next, Lecture 3.6: extending NLD to the VLM with a Pixtral vision encoder + asymmetric dual-stream.

@@ -1,4 +1,4 @@
-# 3.1 — Model card and config walkthrough
+# 3.1 - Model card and config walkthrough
 
 > **Goal of this lecture.** Read the Hugging Face model card and `config.json` of Nemotron-Labs-Diffusion (both 8B text and VLM-8B variants) field by field, and connect every numeric to the architectural concepts from Series 1–2. By the end you should be able to (i) reproduce the model architecture from the config alone, (ii) identify what every non-standard field controls, and (iii) spot the design choices that distinguish NLD from a vanilla Llama-style AR LM.
 
@@ -99,7 +99,7 @@ vocab_size:              131072
 
 This is structurally identical to **Mistral / Ministral3-8B**. 32 Q-heads sharing 8 KV-heads (GQA group size 4), 34 transformer decoder layers, FFN expansion ratio 14336/4096 ≈ 3.5×, SwiGLU activations (`hidden_act: silu`).
 
-Parameter count: 7.85B + 0.005B for the mask token embedding ≈ 8.0B total. The reason NLD-8B has the same FLOP/parameter budget as Ministral3-8B is intentional — the diffusion machinery is *free* in inference compute. Only the training cost increases (Lecture 3.3).
+Parameter count: 7.85B + 0.005B for the mask token embedding ≈ 8.0B total. The reason NLD-8B has the same FLOP/parameter budget as Ministral3-8B is intentional - the diffusion machinery is *free* in inference compute. Only the training cost increases (Lecture 3.3).
 
 ### 2.2 RoPE and context length
 
@@ -113,7 +113,7 @@ rope_parameters.rope_theta: 1000000.0
 
 NLD uses **YaRN** RoPE scaling with factor 16. Trained at native context 16,384, extended to 262,144 (16× longer) via YaRN's interpolation/extrapolation hybrid. The `beta_fast = 32`, `beta_slow = 1` parameters control the high-frequency rotation extrapolation that YaRN uses to preserve high-precision positional encoding even at the extended context.
 
-Practical implication: NLD-8B can prefill up to 256K tokens but the *bulk* of evaluation is in the 0–16K range. Long-context performance at 256K is described in the tech report §5.3 — accuracy drops to ~70% of the within-training-context value (typical for YaRN-scaled models).
+Practical implication: NLD-8B can prefill up to 256K tokens but the *bulk* of evaluation is in the 0–16K range. Long-context performance at 256K is described in the tech report §5.3 - accuracy drops to ~70% of the within-training-context value (typical for YaRN-scaled models).
 
 The choice of `rope_theta = 1e6` matches the Ministral3 base.
 
@@ -133,13 +133,13 @@ dp_varying_mask_ratio: false
 | Field | Meaning |
 |---|---|
 | `ar_loss_weight` | Coefficient on the AR-loss term in the joint objective. NLD uses 1.0. |
-| `dlm_loss_weight` | Coefficient on the diffusion-loss term. In the VLM `config.json` this is 0.5 (so $\alpha = 0.5$ in the notation of Lecture 2.2). In the text-model config it's `null`, which the loader interprets as "use the default" — which for `NemotronLabsDiffusionConfig` is also 0.5. |
-| `dlm_paradigm` | "bidirectional" means the diffusion mode uses fully bidirectional attention within blocks (the standard MDLM / block-diffusion setting). Other valid values from the source code are "autoregressive" (degenerate — no diffusion) and "block_diff" (block-causal + bidirectional intra-block, used at training time). |
+| `dlm_loss_weight` | Coefficient on the diffusion-loss term. In the VLM `config.json` this is 0.5 (so $\alpha = 0.5$ in the notation of Lecture 2.2). In the text-model config it's `null`, which the loader interprets as "use the default" - which for `NemotronLabsDiffusionConfig` is also 0.5. |
+| `dlm_paradigm` | "bidirectional" means the diffusion mode uses fully bidirectional attention within blocks (the standard MDLM / block-diffusion setting). Other valid values from the source code are "autoregressive" (degenerate - no diffusion) and "block_diff" (block-causal + bidirectional intra-block, used at training time). |
 | `block_size` | The block size $B$ used for both training and inference. Tied to `block_length` at generation time. |
 | `mask_token_id` | The token id used for `[MASK]` in the absorbing-state diffusion. NLD reserves id 100, the first available slot after the Ministral3 special tokens. |
 | `dp_varying_mask_ratio` | If true, each DP rank sees a different masking ratio per batch (Lecture 3.3 §4). Disabled in the released text model; can be enabled when fine-tuning. |
 
-The **structural insight** here is that the NLD config is *strictly a superset* of the Ministral3 config — all standard Mistral fields are preserved, plus a handful of NLD-specific knobs. You can load an NLD checkpoint with `AutoModelForCausalLM` using `trust_remote_code=True` and get a working AR-mode LM that's bit-equivalent to a fine-tuned Ministral3-8B-Instruct.
+The **structural insight** here is that the NLD config is *strictly a superset* of the Ministral3 config - all standard Mistral fields are preserved, plus a handful of NLD-specific knobs. You can load an NLD checkpoint with `AutoModelForCausalLM` using `trust_remote_code=True` and get a working AR-mode LM that's bit-equivalent to a fine-tuned Ministral3-8B-Instruct.
 
 ### 2.4 The auto_map and `trust_remote_code`
 
@@ -151,18 +151,18 @@ auto_map:
 
 NLD ships **all of its forward / generation / loss code as `.py` files in the HF repo**, not in the `transformers` library. You must pass `trust_remote_code=True` when loading. The model classes live in:
 
-- `configuration_nemotron_labs_diffusion.py` — the config class (subclass of `PretrainedConfig`).
-- `modeling_nemotron_labs_diffusion.py` — the model (subclass of `Ministral3PreTrainedModel`).
+- `configuration_nemotron_labs_diffusion.py` - the config class (subclass of `PretrainedConfig`).
+- `modeling_nemotron_labs_diffusion.py` - the model (subclass of `Ministral3PreTrainedModel`).
 
 For the VLM:
 - `configuration_nemotron_labs_diffusion_vlm.py`
-- `modeling_nemotron_labs_diffusion_vlm.py` — the central file we'll be reading line by line in Lectures 3.2 onwards.
+- `modeling_nemotron_labs_diffusion_vlm.py` - the central file we'll be reading line by line in Lectures 3.2 onwards.
 
 The decision to live outside `transformers` reflects the modeling code's novelty: the dual-stream forward, the `set_attention_mode`, and the FlexAttention block-mask construction are not standard `transformers` building blocks. NLD's authors chose to keep the code in the model repo where they can iterate on it freely.
 
-### 2.5 `attn_implementation: "sdpa"` — and the FlexAttention escape hatch
+### 2.5 `attn_implementation: "sdpa"` - and the FlexAttention escape hatch
 
-The text config sets `attn_implementation: "sdpa"` as default. This uses PyTorch's `scaled_dot_product_attention` for AR-mode and bidirectional-mode inference — which is well-supported across hardware.
+The text config sets `attn_implementation: "sdpa"` as default. This uses PyTorch's `scaled_dot_product_attention` for AR-mode and bidirectional-mode inference - which is well-supported across hardware.
 
 But when the model needs the **structured 2L × 2L attention mask** (block-causal + block-diagonal + offset-block-causal), SDPA cannot express it. NLD falls back to **FlexAttention** for that case. The VLM config sets `attn_implementation: null`, which the loader resolves to FlexAttention by default. Lecture 3.2 §4 covers the mask-construction code in detail.
 
@@ -170,7 +170,7 @@ The choice between SDPA and FlexAttention is dynamic: at inference, the model ca
 
 ### 2.6 `use_cache: false`
 
-A surprising default. NLD ships with `use_cache: false`, meaning KV-cache reuse is *not* the default behaviour. This is because in dual-stream training the noisy and clean views are concatenated and re-encoded each step — there's no autoregressive history to cache.
+A surprising default. NLD ships with `use_cache: false`, meaning KV-cache reuse is *not* the default behaviour. This is because in dual-stream training the noisy and clean views are concatenated and re-encoded each step - there's no autoregressive history to cache.
 
 At inference, the user explicitly enables KV caching when calling `generate()` or `sbd_inference_diffusion_quadratic()`. The cache is then used aggressively to share the clean-prefix state across self-speculation cycles.
 
@@ -182,7 +182,7 @@ tie_word_embeddings: false
 
 NLD does **not** tie the input and output embeddings. This matters for the diffusion mode: the input embedding for `[MASK]` is the same vector everywhere, but the output logit for `[MASK]` at generation time is *not* used (we never want to predict `[MASK]` as an output). Untying the embeddings lets the lm_head zero out the `[MASK]` logit independent of how `[MASK]` is consumed at input.
 
-The lm_head has shape `[131072, 4096]` ≈ 537M params. Together with the embedding's 537M, the embeddings sum to ~1.07B. This is **13% of the total parameter count** — a significant memory chunk in the sub-10B regime.
+The lm_head has shape `[131072, 4096]` ≈ 537M params. Together with the embedding's 537M, the embeddings sum to ~1.07B. This is **13% of the total parameter count** - a significant memory chunk in the sub-10B regime.
 
 ---
 
@@ -233,7 +233,7 @@ num_hidden_layers:       24
 
 Image up to 1540×1540, patched into 14×14 tiles, giving up to $(1540/14)^2 = 12{,}100$ patches per image. After 2×2 spatial merge: up to ~3000 tokens per image. The projector then maps each 4096-dim merged-patch vector to a 4096-dim LM token (no dim change).
 
-The vision tower is **initialized from `mistralai/Pixtral-12B-2409`'s encoder**, which has the same shape. The choice ensures the projected vision tokens land in approximately the right neighborhood of the LM's input embedding space — see the "exact merge initialization" in Lecture 3.6.
+The vision tower is **initialized from `mistralai/Pixtral-12B-2409`'s encoder**, which has the same shape. The choice ensures the projected vision tokens land in approximately the right neighborhood of the LM's input embedding space - see the "exact merge initialization" in Lecture 3.6.
 
 ---
 
@@ -257,10 +257,10 @@ num_skip_loss_tokens:      0
 
 These are toggles for variant training procedures explored during research:
 
-- `prefix_ratio: 0.8` — During training, 80% of the sequence is treated as a "prefix" (no mask, full causal AR), and the remaining 20% is the candidate-block range that can be masked. Reflects the realistic chat workload: most tokens are the prompt; only the tail is generation.
-- `random_length_prob: 0` — Whether to randomly truncate sequences during training. Disabled.
-- `multi_sampling: null` — Whether to use multiple samples of the noisy view per training step. Disabled in production.
-- `num_ar_layers, num_diffusion_layers: 0, 0` — Allows splitting the model into AR-only and diffusion-only sub-stacks. Both 0 means a *fully shared* stack (all 34 layers see both losses). This is the production setting.
+- `prefix_ratio: 0.8` - During training, 80% of the sequence is treated as a "prefix" (no mask, full causal AR), and the remaining 20% is the candidate-block range that can be masked. Reflects the realistic chat workload: most tokens are the prompt; only the tail is generation.
+- `random_length_prob: 0` - Whether to randomly truncate sequences during training. Disabled.
+- `multi_sampling: null` - Whether to use multiple samples of the noisy view per training step. Disabled in production.
+- `num_ar_layers, num_diffusion_layers: 0, 0` - Allows splitting the model into AR-only and diffusion-only sub-stacks. Both 0 means a *fully shared* stack (all 34 layers see both losses). This is the production setting.
 
 The fact that all these are disabled in the production config reflects an **ablation-tested-and-converged** state. The simplest joint-loss recipe wins.
 
@@ -282,11 +282,11 @@ A line-by-line count of the 8B text model:
 | `input_layernorm` | 4.10 K | 0.14 M | 0.0003 GB |
 | `post_attention_layernorm` | 4.10 K | 0.14 M | 0.0003 GB |
 | **Per-block subtotal** | **218.1 M** | **7411 M** | **14.81 GB** |
-| Embedding (131072 × 4096) | — | 537 M | 1.07 GB |
-| Final RMSNorm | — | 4.1 K | 8 KB |
-| `lm_head` (4096 → 131072) | — | 537 M | 1.07 GB |
-| `[MASK]` embedding (init) | — | 4 K | 8 KB |
-| **Total** | — | **~8.49 B** | **~16.97 GB** |
+| Embedding (131072 × 4096) | - | 537 M | 1.07 GB |
+| Final RMSNorm | - | 4.1 K | 8 KB |
+| `lm_head` (4096 → 131072) | - | 537 M | 1.07 GB |
+| `[MASK]` embedding (init) | - | 4 K | 8 KB |
+| **Total** | - | **~8.49 B** | **~16.97 GB** |
 
 So the byte cost of NLD-8B in BF16 is **~17 GB**, dominated by 7.4B params in the transformer stack and 1.07B in the two embedding tables.
 
@@ -298,7 +298,7 @@ So the byte cost of NLD-8B in BF16 is **~17 GB**, dominated by 7.4B params in th
 
 Three architectural facts that don't appear in `config.json`:
 
-1. **The shared LoRA option.** The released NLD-8B can be fine-tuned with a LoRA on `o_proj` (rank 128, α 512) to improve drafter alignment. The LoRA weights are *not* in the base config — they ship as a separate adapter (Lecture 3.4 §3).
+1. **The shared LoRA option.** The released NLD-8B can be fine-tuned with a LoRA on `o_proj` (rank 128, α 512) to improve drafter alignment. The LoRA weights are *not* in the base config - they ship as a separate adapter (Lecture 3.4 §3).
 
 2. **The quadratic self-speculation expansion factor.** The quadratic mode expands the draft from $B = 32$ to $B(B+1)/2$ candidate positions per cycle. This is controlled by an inference-time flag `enc_config.self_spec_inference_mode = "quadratic"`, not a config field (Lecture 3.5).
 
@@ -364,7 +364,7 @@ Solutions to (1), (2) are in [Appendix B](../appendix/reading-list.md#exercise-s
 
 - **HF Mistral docs** for the standard fields (`hidden_size`, `num_attention_heads`, …). https://huggingface.co/docs/transformers/main/en/model_doc/mistral
 - **YaRN paper** (Peng et al., 2023). [arXiv:2309.00071](https://arxiv.org/abs/2309.00071). For `rope_type: yarn` and the rope parameters.
-- **Pixtral 12B paper** (Mistral AI, 2024). https://mistral.ai/news/pixtral-12b/ — for `vision_config` defaults.
+- **Pixtral 12B paper** (Mistral AI, 2024). https://mistral.ai/news/pixtral-12b/ - for `vision_config` defaults.
 - **Nemotron-Labs-Diffusion Tech Report**, §3 (architecture) and §4 (training pipeline).
 - **HuggingFace `auto_map`** and `trust_remote_code` docs: how externally-hosted modeling files are loaded.
 

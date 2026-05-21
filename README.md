@@ -19,7 +19,7 @@ The first three series are written as mdBook chapters and rendered to a navigabl
 
 ## Reading the book
 
-Online (rendered): https://dung-vpt.github.io/nemotron-diffusion-study/
+Online (rendered): https://tuandung222.github.io/nemotron-diffusion-study/
 
 Locally:
 

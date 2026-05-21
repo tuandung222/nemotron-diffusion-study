@@ -1,7 +1,7 @@
 [book]
 title = "Nemotron-Labs-Diffusion Study"
 description = "A self-contained set of lecture notes and code labs covering diffusion language models, mixed AR-diffusion training, and a deep dive into NVIDIA's Nemotron-Labs-Diffusion (NLD) model family — including the VLM variant."
-authors = ["dung-vpt", "Devin (drafting assistant)"]
+authors = ["tuandung222", "Devin (drafting assistant)"]
 language = "en"
 multilingual = false
 src = "src"
@@ -13,8 +13,8 @@ create-missing = false
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
-git-repository-url = "https://github.com/dung-vpt/nemotron-diffusion-study"
-edit-url-template = "https://github.com/dung-vpt/nemotron-diffusion-study/edit/main/{path}"
+git-repository-url = "https://github.com/tuandung222/nemotron-diffusion-study"
+edit-url-template = "https://github.com/tuandung222/nemotron-diffusion-study/edit/main/{path}"
 mathjax-support = true
 no-section-label = false
 additional-css = ["theme/custom.css"]

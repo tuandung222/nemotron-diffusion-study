@@ -29,6 +29,11 @@ jobs:
             | tar -xz -C "$HOME/.cargo/bin"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
+      - name: Install mdbook-katex preprocessor
+        run: |
+          # Pre-built binary from crates.io release. Avoids waiting for `cargo install` to compile.
+          cargo install --locked mdbook-katex --version "0.9.4"
+
       - name: Build the book
         run: mdbook build
 

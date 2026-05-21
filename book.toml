@@ -15,7 +15,7 @@ default-theme = "navy"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/tuandung222/nemotron-diffusion-study"
 edit-url-template = "https://github.com/tuandung222/nemotron-diffusion-study/edit/main/{path}"
-mathjax-support = true
+mathjax-support = false
 no-section-label = false
 additional-css = ["theme/custom.css"]
 
@@ -38,3 +38,13 @@ editable = false
 copyable = true
 copy-js = true
 line-numbers = true
+
+[preprocessor.katex]
+# Inline math: $...$  ;  Display math: $$...$$
+# KaTeX is run as a preprocessor, BEFORE the markdown -> HTML stage,
+# so underscores inside math expressions are no longer eaten by the
+# markdown italic parser. This is the fix for "x_t" being mis-rendered
+# as "xt" because markdown consumed the underscores.
+macros = "./theme/katex-macros.txt"
+# Don't throw build errors on bad input — log + continue. Catches in CI as warnings.
+throw-on-error = false

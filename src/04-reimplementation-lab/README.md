@@ -1,25 +1,33 @@
-# Series 4 — Re-implementation lab *(planned)*
+# Series 4 — Re-implementation lab
 
-This series is not yet written. It will consist of progressive Jupyter notebooks that build a working tri-mode VLM in miniature.
+This series consists of six progressive Jupyter notebooks that build a working **tri-mode VLM** in miniature. Each lab is self-contained, builds on the previous one, and runs end-to-end on CPU in under 15 minutes (GPU: < 1 minute).
 
-Provisional notebook list:
+## How to run
 
-1. **Lab 1 — Minimal AR transformer (review).** Small GPT-style model on TinyStories. 30 minutes of training to a baseline.
+```bash
+cd notebooks/
+pip install -r requirements.txt   # torch, numpy
+jupyter lab                        # or jupyter notebook
+```
 
-2. **Lab 2 — MDLM training.** Convert Lab 1's model to a masked diffusion LM by changing the loss and the attention mask. Reproduce the MDLM-style training and compare perplexity to Lab 1.
+Open each notebook in order (`01-…` → `06-…`). All cells are executable as-is.
 
-3. **Lab 3 — Block diffusion.** Add the `compute_block_mask` machinery. Inference loop with confidence-threshold sampling.
+## Lab overview
 
-4. **Lab 4 — Joint AR + diffusion (single model, dual-stream).** Implement the M_BD / M_OBC / M_BC mask construction and the dual-stream loss. Verify that AR accuracy is preserved while diffusion TPF $> 1$.
+| Lab | Title | Key concept | Model size |
+|-----|-------|------------|------------|
+| 4.1 | Minimal AR transformer | Baseline: causal attention, next-token CE loss | 0.8M |
+| 4.2 | Diffusion masking + loss | MDLM-style mask-then-denoise; bidirectional attention | 0.8M |
+| 4.3 | Dual-stream training | Joint AR + diffusion loss; structured 2L × 2L mask (M_BD ∪ M_OBC ∪ M_BC) | 0.8M |
+| 4.4 | Tri-mode generate() | One model, three decoding modes; side-by-side TPF comparison | 0.8M |
+| 4.5 | Self-speculation + KV cache | Cache clone/crop; shared-cache draft → verify cycle | 0.8M |
+| 4.6 | VLM extension | Tiny vision encoder; asymmetric dual-stream; image classification | 0.2M |
 
-5. **Lab 5 — Linear self-speculation.** Implement DRAFT (diffusion) + VERIFY (AR) on shared backbone weights. Measure acceptance length and TPF.
+## Design principles
 
-6. **Lab 6 — Vision encoder integration.** Add a tiny CNN-based image encoder and projector. Asymmetric dual-stream where vision tokens are only on the clean side.
+- **Toy scale, real patterns.** Models are 0.2–0.8M parameters on a character-level corpus. The architecture and training code mirror NLD-8B step-for-step — only the scale differs.
+- **No GPU required.** Every notebook runs on CPU. GPU just makes it faster.
+- **Each lab has assertions.** Final cells verify shapes, mask structure, and intermediate results to catch bugs early.
+- **Progressive complexity.** Lab 1 is a standard GPT. Lab 6 is a VLM with asymmetric dual-stream. Each lab adds one concept.
 
-7. **Lab 7 — End-to-end mini-NLD-VLM.** Put it all together. Train on a small VQA-style dataset.
-
-All notebooks target a single A100/L40S GPU at ≤ 4 GB VRAM so they run in Colab.
-
-Notebooks will be added to `notebooks/` after the corresponding lectures in Series 2/3 are written.
-
-> Note: these are *re-implementation* exercises for understanding, not reproduction attempts. NLD-VLM-8B was trained on thousands of GPUs over multiple weeks. The labs use models with $\sim$1M parameters and toy datasets, but follow the same architectural pattern step-for-step.
+> **Note:** These are *re-implementation* exercises for understanding, not reproduction attempts. NLD-VLM-8B was trained on thousands of GPUs over multiple weeks.

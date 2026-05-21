@@ -29,9 +29,15 @@
 - [3.6 — VLM extension: Pixtral encoder + asymmetric dual-stream](./03-nemotron-deep-dive/06-vlm-extension.md)
 - [3.7 — Benchmarks and deployment economics](./03-nemotron-deep-dive/07-benchmarks-and-deployment.md)
 
-# Series 4 — Re-implementation lab *(planned)*
+# Series 4 — Re-implementation lab
 
 - [4.0 — How to run the labs](./04-reimplementation-lab/README.md)
+- [4.1 — Minimal AR transformer](./04-reimplementation-lab/01-minimal-ar-transformer.md)
+- [4.2 — Adding diffusion masking and loss](./04-reimplementation-lab/02-diffusion-masking-and-loss.md)
+- [4.3 — Dual-stream training](./04-reimplementation-lab/03-dual-stream-training.md)
+- [4.4 — Tri-mode generate()](./04-reimplementation-lab/04-tri-mode-generate.md)
+- [4.5 — Self-speculation with shared KV cache](./04-reimplementation-lab/05-self-speculation-shared-kv.md)
+- [4.6 — VLM extension with a tiny vision encoder](./04-reimplementation-lab/06-vlm-extension.md)
 
 ---
 

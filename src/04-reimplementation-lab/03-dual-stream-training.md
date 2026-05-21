@@ -1,10 +1,10 @@
-# Lab 4.3 — Dual-stream training
+# Lab 4.3 Dual-stream training
 
 > **Notebook:** [`notebooks/03-dual-stream-training.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/03-dual-stream-training.ipynb)
 >
 > **Runtime:** CPU < 3 min · GPU < 30 s · **Params:** 0.83M
 
-This is the most important lab in the series — it introduces the **dual-stream input layout** and the **structured attention mask** $M_{BD} \cup M_{OBC} \cup M_{BC}$ that make joint AR + diffusion training work in a single forward.
+This is the most important lab in the series, it introduces the **dual-stream input layout** and the **structured attention mask** $M_{BD} \cup M_{OBC} \cup M_{BC}$ that make joint AR + diffusion training work in a single forward.
 
 ## What you build
 
@@ -46,7 +46,7 @@ The output is a `(2L, 2L)` boolean tensor. Visualised with `L=8, block_size=4`:
  [0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1]]
 ```
 
-This is identical to NLD's `block_diff_mask` (Lecture 3.2 §3). Read the section now if rows 8-15 look surprising — the key insight is that **clean rows are strictly causal**, not bidirectional.
+This is identical to NLD's `block_diff_mask` (Lecture 3.2 §3). Read the section now if rows 8-15 look surprising, the key insight is that **clean rows are strictly causal**, not bidirectional.
 
 ### 2. The joint loss
 
@@ -70,7 +70,7 @@ Two forwards, two losses, one model. Exactly the joint objective from Lecture 2.
 
 ## What you measure
 
-- Both losses drop together — AR ≈ 0.07, diffusion ≈ 1.6 after 150 steps.
+- Both losses drop together, AR ≈ 0.07, diffusion ≈ 1.6 after 150 steps.
 - AR generation works: "The quick brown fox jumps over the lazy dog. Pack my box with five fi…"
 - Block-diffusion generation produces text with **TPF > 1**.
 
@@ -86,7 +86,7 @@ The notebook includes seven explicit assertions on the mask structure:
 - Clean → future clean is False.
 - Clean → past clean is True.
 
-All seven must pass — if they don't, the mask is wrong and downstream labs will fail.
+All seven must pass, if they don't, the mask is wrong and downstream labs will fail.
 
 ## What the next lab changes
 

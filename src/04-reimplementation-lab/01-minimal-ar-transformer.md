@@ -1,4 +1,4 @@
-# Lab 4.1 — Minimal AR transformer
+# Lab 4.1 Minimal AR transformer
 
 > **Notebook:** [`notebooks/01-minimal-ar-transformer.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/01-minimal-ar-transformer.ipynb)
 >
@@ -9,7 +9,7 @@ This is the baseline. A standard causal-LM (GPT-style) on a tiny character-level
 ## What you build
 
 - A 4-layer, 128-dim, 4-head transformer with **causal self-attention** (`tril`-based mask).
-- Position embeddings (learned, not RoPE — we want minimal moving parts).
+- Position embeddings (learned, not RoPE, we want minimal moving parts).
 - AdamW + cosine LR + grad clipping. 200 steps to converge on the toy data.
 
 ## What you measure

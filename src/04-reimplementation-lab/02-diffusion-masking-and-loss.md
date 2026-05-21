@@ -1,10 +1,10 @@
-# Lab 4.2 — Adding diffusion masking and loss
+# Lab 4.2 Adding diffusion masking and loss
 
 > **Notebook:** [`notebooks/02-diffusion-masking-and-loss.ipynb`](https://github.com/tuandung222/nemotron-diffusion-study/blob/main/notebooks/02-diffusion-masking-and-loss.ipynb)
 >
 > **Runtime:** CPU < 90 s · GPU < 10 s · **Params:** 0.81M
 
-This lab converts the AR transformer from Lab 4.1 into a **masked diffusion** LM. The architecture is unchanged — only the loss and the attention mask differ.
+This lab converts the AR transformer from Lab 4.1 into a **masked diffusion** LM. The architecture is unchanged, only the loss and the attention mask differ.
 
 ## What changes from Lab 4.1
 
@@ -29,7 +29,7 @@ This lab converts the AR transformer from Lab 4.1 into a **masked diffusion** LM
 
 ## What you measure
 
-- Diffusion training loss curve (will plateau at higher value than Lab 4.1's AR loss — different objective).
+- Diffusion training loss curve (will plateau at higher value than Lab 4.1's AR loss, different objective).
 - TPF for iterative vs block-wise generation.
 
 ## Mathematical note

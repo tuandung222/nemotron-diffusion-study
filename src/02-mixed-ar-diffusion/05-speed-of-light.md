@@ -1,4 +1,4 @@
-# 2.5 — Speed-of-Light analysis: the theoretical ceiling of parallel decoding
+# 2.5 Speed-of-Light analysis: the theoretical ceiling of parallel decoding
 
 > **Goal of this lecture.** Compute the *upper bound* on tokens-per-second for any decoder-only LM as a function of (model size, batch size, GPU memory bandwidth, GPU FLOPs). Compare against NLD's measured numbers to compute the **SOL utilisation** and identify what's left on the table. By the end you should be able to: (i) state the SOL formula in the memory-bound and compute-bound regimes, (ii) compute SOL for an arbitrary (model, GPU, batch) combination, (iii) read NLD's tech-report tables and immediately identify which numbers are SOL-limited vs algorithm-limited.
 
@@ -8,7 +8,7 @@ Background assumed: Lecture 1.1 (memory-bound vs compute-bound), Lecture 2.3 (se
 
 ## 1. The roofline model in one paragraph
 
-Every dense matmul on a GPU is either *memory-bound* (the GPU can finish the FLOPs faster than HBM can stream the operand bytes — so the actual throughput equals HBM bandwidth × bytes-per-FLOP) or *compute-bound* (the operands are small enough to stay in SRAM/L2 — so throughput equals peak FLOPs). The transition between regimes happens at a critical *arithmetic intensity* $I^*$ given by:
+Every dense matmul on a GPU is either *memory-bound* (the GPU can finish the FLOPs faster than HBM can stream the operand bytes, so the actual throughput equals HBM bandwidth × bytes-per-FLOP) or *compute-bound* (the operands are small enough to stay in SRAM/L2, so throughput equals peak FLOPs). The transition between regimes happens at a critical *arithmetic intensity* $I^*$ given by:
 
 $$
 I^* \;=\; \frac{\text{peak FLOPs/s}}{\text{HBM bandwidth (bytes/s)}}.
@@ -153,13 +153,13 @@ NLD reaches **roughly 55% SOL utilisation across hardware**. This is a consisten
 
 The standard accounting for non-SOL overhead in inference:
 
-1. **KV-cache attention.** At long context, the KV cache becomes a non-trivial fraction of the bytes streamed per token. Each new query reads the entire history's KV. This is $O(L \cdot b \cdot d)$ extra bytes per token. For $L = 2048$, $b = 1$, $d = 4096$, that's ~33 MB per token — small relative to model weight load (16 GB), so usually ≤ 5% overhead. NLD's evals run at moderate context lengths so this is bounded.
+1. **KV-cache attention.** At long context, the KV cache becomes a non-trivial fraction of the bytes streamed per token. Each new query reads the entire history's KV. This is $O(L \cdot b \cdot d)$ extra bytes per token. For $L = 2048$, $b = 1$, $d = 4096$, that's ~33 MB per token, small relative to model weight load (16 GB), so usually ≤ 5% overhead. NLD's evals run at moderate context lengths so this is bounded.
 
 2. **Activation memory.** The forward pass writes intermediate activations to HBM for FlashAttention-style attention computation. ~5–10% of streamed bytes.
 
-3. **Layer norm + small ops.** RMSNorm, Rotary embeddings, the embedding lookup — none individually large but together ~3% of total bytes.
+3. **Layer norm + small ops.** RMSNorm, Rotary embeddings, the embedding lookup, none individually large but together ~3% of total bytes.
 
-4. **Sampling / softmax / postprocessing.** Top-k selection, argmax, threshold checks — ~2% of forward time.
+4. **Sampling / softmax / postprocessing.** Top-k selection, argmax, threshold checks, ~2% of forward time.
 
 5. **Kernel launch overhead.** ~3% on B200 (kernel launches are not free even at zero-cost).
 
@@ -201,7 +201,7 @@ Bandwidth: 0.4 TB/s (DDR5, no HBM). Peak FLOPs: ~25 TFLOPs (BF16).
 
 $I^* = 25 / 0.4 = 62.5$, so memory-bound up to $b \approx 60 / \text{TPF}$. At TPF = 6, crossover is $b \approx 10$.
 
-The DGX Spark use case is **on-device single-user**: $b = 1$, latency-critical. NLD self-speculation reports 80 tok/s here — 3.3× the AR baseline. SOL is 150 tok/s, so utilisation is ≈ 53%.
+The DGX Spark use case is **on-device single-user**: $b = 1$, latency-critical. NLD self-speculation reports 80 tok/s here, 3.3× the AR baseline. SOL is 150 tok/s, so utilisation is ≈ 53%.
 
 This is the regime where NLD's batch-1 advantage matters most. EAGLE-3 reports 50 tok/s on the same hardware (drafter HBM tax bites hard at this bandwidth).
 
@@ -209,7 +209,7 @@ This is the regime where NLD's batch-1 advantage matters most. EAGLE-3 reports 5
 
 Bandwidth: 3.35 TB/s. Peak FLOPs: 989 TFLOPs. $I^* \approx 295$.
 
-Crossover at TPF = 6 is $b \approx 49$. The H100 batch-1 use case (LLM API at low concurrency) hits 740 tok/s with NLD self-spec, against 209 tok/s SOL for AR — 3.5× speedup over AR baseline.
+Crossover at TPF = 6 is $b \approx 49$. The H100 batch-1 use case (LLM API at low concurrency) hits 740 tok/s with NLD self-spec, against 209 tok/s SOL for AR, 3.5× speedup over AR baseline.
 
 ### 5.3 GB200 NVL72 (cloud, high-batch)
 
@@ -226,7 +226,7 @@ The GB200 NVL72 use case is **cloud high-concurrency**: $b = 64$–$256$. NLD's 
 | DGX Spark | Single-user on-device | Self-spec linear | 3.3× over AR |
 | H100 single | Low-concurrency API | Self-spec linear | 3.5× |
 | GB200 NVL72 | High-batch cloud | AR (b ≥ 64) | 1.4× |
-| B200 (general) | Mixed | Self-spec at low b, AR at high b | — |
+| B200 (general) | Mixed | Self-spec at low b, AR at high b |, |
 
 Pattern: NLD is most valuable on **low-bandwidth, low-batch** hardware. The higher the bandwidth or batch size, the smaller the NLD advantage.
 
@@ -288,4 +288,4 @@ Solutions to (1), (4), (5) are in [Appendix B](../appendix/reading-list.md#exerc
 - **NVIDIA Hopper Architecture Whitepaper** (2024). For peak bandwidth and FLOPs numbers on H100/H200/B200/GB200 NVL72.
 - **Nemotron-Labs-Diffusion Tech Report** (Fu et al., 2026). §7 (deployment economics) and Tables 7–9 (per-GPU benchmarks).
 
-End of Series 2. Series 3 takes the abstract machinery from Series 1+2 and reads the actual NLD source code line by line — starting with the model card and `config.json`.
+End of Series 2. Series 3 takes the abstract machinery from Series 1+2 and reads the actual NLD source code line by line, starting with the model card and `config.json`.

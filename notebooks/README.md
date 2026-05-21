@@ -1,4 +1,4 @@
-# Notebooks — Series 4: Re-implementation lab
+# Notebooks, Series 4: Re-implementation lab
 
 Six progressive Jupyter notebooks that build a working tri-mode VLM in miniature. Each notebook is self-contained and builds on the previous one.
 
@@ -36,7 +36,7 @@ Install via `pip install -r requirements.txt`.
 ## Design notes
 
 - **CPU-friendly.** Every notebook runs on CPU. GPU just speeds it up.
-- **Toy scale.** Models are 0.2–0.8M parameters on character-level corpora — the architectures and training code mirror NLD-8B step-for-step, only the scale differs.
+- **Toy scale.** Models are 0.2–0.8M parameters on character-level corpora, the architectures and training code mirror NLD-8B step-for-step, only the scale differs.
 - **Assertions in every notebook.** Final cells verify mask structure, model shapes, and intermediate results.
 
 For prose discussion, see the corresponding chapter in the mdBook (e.g. `src/04-reimplementation-lab/01-…md`).

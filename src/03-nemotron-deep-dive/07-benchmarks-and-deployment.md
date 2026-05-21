@@ -1,4 +1,4 @@
-# 3.7 — Benchmarks and deployment economics
+# 3.7 Benchmarks and deployment economics
 
 > **Goal of this lecture.** Read NLD's published benchmark tables critically. Compute SOL utilisation for every published number, decompose where speedup comes from (TPF vs hardware vs quality), and end with a deployment-decision flowchart. By the end you should be able to: (i) reproduce any of NLD's tech-report numbers from your own measurements, (ii) decide which inference mode + hardware combination is right for a given workload, and (iii) identify the next 2× speedup opportunity for production.
 
@@ -27,7 +27,7 @@ The key takeaways:
 
 1. **Quality is preserved or improved.** NLD's AR mode matches or slightly beats Ministral3, and self-spec matches AR. No quality cost for the speedup.
 2. **MATH and HumanEval improve.** The joint training acts as a quality regulariser on reasoning-heavy benchmarks. The most plausible mechanism: the bidirectional intra-block attention during training helps the model see relationships between tokens that AR-only training misses.
-3. **No degradation on knowledge benchmarks.** MMLU is unchanged — the LM didn't lose factual recall during joint training.
+3. **No degradation on knowledge benchmarks.** MMLU is unchanged, the LM didn't lose factual recall during joint training.
 
 The 0.6-point average improvement over Ministral3 is small but consistent. The headline is "no harm done, plus a free 5–6× speedup".
 
@@ -46,7 +46,7 @@ The core deployment numbers. Tech report Table 6 (extracted):
 | Linear self-spec | 6.0 | 1680 | 3000 | 56% |
 | Quadratic self-spec | 8.0 | 2240 | 4000 | 56% |
 
-The 56% SOL utilisation is constant across modes — confirming that NLD's per-cycle engineering overhead is mode-independent, just multiplied by TPF.
+The 56% SOL utilisation is constant across modes, confirming that NLD's per-cycle engineering overhead is mode-independent, just multiplied by TPF.
 
 ### 2.2 H100 (mid-tier cloud, b=1)
 
@@ -98,7 +98,7 @@ Tech report Table 7 reports per-mode throughput at various batch sizes on B200:
 
 Three patterns:
 
-1. **AR scales linearly with batch in the memory-bound regime** (b ≤ 32), then sublinearly as it transitions to compute-bound. By b=512 it's at 28K tok/s vs 500 tok/s × 512 = 256K SOL — so 11% utilisation. (The drop reflects compute-boundedness.)
+1. **AR scales linearly with batch in the memory-bound regime** (b ≤ 32), then sublinearly as it transitions to compute-bound. By b=512 it's at 28K tok/s vs 500 tok/s × 512 = 256K SOL, so 11% utilisation. (The drop reflects compute-boundedness.)
 
 2. **Self-spec's relative speedup decreases with batch.** At b=1 it's 6× AR; at b=64 it's 1.15× AR. By b=128, AR is outright faster. The crossover happens when AR enters compute-bound regime (no more memory-headroom for self-spec to exploit).
 
@@ -183,7 +183,7 @@ A useful rule of thumb:
 
 > **If your AR baseline is memory-bound, NLD self-spec wins. If it's compute-bound, AR is comparable.**
 
-For the cloud LLM business, this means the value of NLD is concentrated in the b=1–8 service tier — where most consumer chat and most agent workloads live. High-batch batch-inference (e.g., overnight bulk processing) gets little benefit.
+For the cloud LLM business, this means the value of NLD is concentrated in the b=1–8 service tier, where most consumer chat and most agent workloads live. High-batch batch-inference (e.g., overnight bulk processing) gets little benefit.
 
 ---
 
@@ -200,7 +200,7 @@ To replicate the published tech-report numbers yourself, you need:
 | Model | `nvidia/Nemotron-Labs-Diffusion-8B` |
 | Workload | Synthetic prompts of varying length |
 
-The released model card includes a basic benchmark script (`benchmark.py`) that reproduces b=1 throughput numbers. Running it on H100 SXM should give ~120 tok/s in AR mode and ~740 tok/s in linear self-spec mode — matching Table 6.
+The released model card includes a basic benchmark script (`benchmark.py`) that reproduces b=1 throughput numbers. Running it on H100 SXM should give ~120 tok/s in AR mode and ~740 tok/s in linear self-spec mode, matching Table 6.
 
 For the high-batch numbers, you'll need a multi-GPU setup with FSDP or tensor parallelism. NLD's released code supports both (FSDP for training; TP for inference). The configuration is in `accelerate/launcher.yaml`.
 
@@ -216,7 +216,7 @@ If your numbers don't match the tech report:
 
 4. **Quantization unloading**: If you loaded with `bnb_8bit`, the dequantization adds per-forward overhead. Use raw BF16 for benchmarks (or FP8 if you have Hopper).
 
-5. **KV cache misallocated**: A common bug — the dynamic cache reallocates each cycle. Use `StaticCache` or pre-allocate to `max_position_embeddings + max_new_tokens`.
+5. **KV cache misallocated**: A common bug, the dynamic cache reallocates each cycle. Use `StaticCache` or pre-allocate to `max_position_embeddings + max_new_tokens`.
 
 ---
 
@@ -259,7 +259,7 @@ The 3B variant of NLD (mentioned but not released as of late 2025) would be ~2.5
 
 ### 9.4 Speculative decoding meta-tree
 
-EAGLE-3 uses a tree of speculative candidates. NLD's linear self-spec is "1-deep tree". A "k-deep tree" — multiple draft candidates per position, with verification of the whole tree in one forward — could push TPF to ~10. But the implementation is complex and the gain marginal vs quadratic self-spec.
+EAGLE-3 uses a tree of speculative candidates. NLD's linear self-spec is "1-deep tree". A "k-deep tree", multiple draft candidates per position, with verification of the whole tree in one forward, could push TPF to ~10. But the implementation is complex and the gain marginal vs quadratic self-spec.
 
 ### 9.5 KV-cache compression
 
@@ -305,9 +305,9 @@ Solutions to (1), (3), (5) are in [Appendix B](../appendix/reading-list.md#exerc
 
 ## 12. Further reading
 
-- **NLD Tech Report §5** (benchmarks), §6 (LoRA), §7 (deployment economics) — the canonical references.
-- **vLLM blog: "Speculative decoding in vLLM"** — for how vLLM integrates speculative-decoding pipelines (NLD self-spec is on the roadmap).
-- **NVIDIA "How to optimise LLM inference"** whitepaper — for the kernel-level optimisations that get from 55% to 75% SOL utilisation.
-- **MLPerf inference benchmarks** — for standardised throughput comparisons across LMs and hardware.
+- **NLD Tech Report §5** (benchmarks), §6 (LoRA), §7 (deployment economics), the canonical references.
+- **vLLM blog: "Speculative decoding in vLLM"**, for how vLLM integrates speculative-decoding pipelines (NLD self-spec is on the roadmap).
+- **NVIDIA "How to optimise LLM inference"** whitepaper, for the kernel-level optimisations that get from 55% to 75% SOL utilisation.
+- **MLPerf inference benchmarks**, for standardised throughput comparisons across LMs and hardware.
 
 End of Series 3. Series 4 is the hands-on lab: six Jupyter notebooks that reimplement everything we've discussed at a 3M-parameter toy scale. Each notebook runs on CPU in under 15 minutes.

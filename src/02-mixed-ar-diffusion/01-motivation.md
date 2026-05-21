@@ -1,6 +1,6 @@
-# 2.1 — Motivation: why unify AR and diffusion in one model?
+# 2.1 Motivation: why unify AR and diffusion in one model?
 
-> **Goal of this lecture.** Build the case — economic, architectural, and empirical — for training **one** transformer that can serve **both** autoregressive and diffusion modes at inference. By the end you should be able to explain to a sceptic why this is *not* just "two models in a trench coat" and why doing it badly is worse than doing either mode alone.
+> **Goal of this lecture.** Build the case, economic, architectural, and empirical, for training **one** transformer that can serve **both** autoregressive and diffusion modes at inference. By the end you should be able to explain to a sceptic why this is *not* just "two models in a trench coat" and why doing it badly is worse than doing either mode alone.
 
 Background assumed: Series 1 in full, especially Lecture 1.4 (block diffusion) and Lecture 1.6 (AR vs diffusion head-to-head). You should know what TPF means, what `compute_block_mask` produces, and roughly how speculative decoding works.
 
@@ -8,9 +8,9 @@ Background assumed: Series 1 in full, especially Lecture 1.4 (block diffusion) a
 
 ## 1. The single-model premise
 
-Across the AR-diffusion literature there is a recurring observation that two-model setups (drafter + verifier, e.g. EAGLE-3) leave throughput on the table at batch 1 because **the drafter is a second weight load through HBM**. On a memory-bound device — anything from a laptop to a DGX Spark — the drafter forward costs almost as much wall-clock as a tiny target forward, and the drafter's quality bottlenecks acceptance length.
+Across the AR-diffusion literature there is a recurring observation that two-model setups (drafter + verifier, e.g. EAGLE-3) leave throughput on the table at batch 1 because **the drafter is a second weight load through HBM**. On a memory-bound device, anything from a laptop to a DGX Spark, the drafter forward costs almost as much wall-clock as a tiny target forward, and the drafter's quality bottlenecks acceptance length.
 
-If we could collapse the drafter and the verifier into one network — same parameters, two attention masks — then:
+If we could collapse the drafter and the verifier into one network, same parameters, two attention masks, then:
 
 1. The HBM load happens **once**, not twice.
 2. The drafter has the **full capacity** of the target model, so it can draft long sequences with high acceptance.
@@ -18,7 +18,7 @@ If we could collapse the drafter and the verifier into one network — same para
 
 This is the *single-model premise* of mixed AR-diffusion training. Whether it actually works depends on whether a single transformer can carry both losses without one cannibalising the other.
 
-> **Subtlety.** "Single model" does not mean "single mode at runtime". NLD shipped with three runtime modes — AR, diffusion, self-speculation — and a small (~36 M-parameter) LoRA adapter that is loaded on top of the base when serving the self-speculation mode. The single-model premise is about the *base* network: there is one set of base weights, jointly trained.
+> **Subtlety.** "Single model" does not mean "single mode at runtime". NLD shipped with three runtime modes, AR, diffusion, self-speculation, and a small (~36 M-parameter) LoRA adapter that is loaded on top of the base when serving the self-speculation mode. The single-model premise is about the *base* network: there is one set of base weights, jointly trained.
 
 ---
 
@@ -42,7 +42,7 @@ Two mechanistic reasons this is not surprising:
 
 - **Different supervision, same forward.** AR and diffusion losses both supervise the same hidden states; the difference is the *target* the head is asked to predict. For tokens that are not masked, the AR cross-entropy already supervises them, and adding a masked-position loss is roughly orthogonal in gradient direction.
 
-- **The masking acts as data augmentation, not a competing objective.** From the AR head's perspective, randomly masking 15% of tokens during training and asking the model to recover them looks suspiciously like dropout-with-context — a regularizer, not a competing task. Indeed several authors (LLaDA, MDLM) report *better* AR accuracy on small-data regimes when a masking loss is added.
+- **The masking acts as data augmentation, not a competing objective.** From the AR head's perspective, randomly masking 15% of tokens during training and asking the model to recover them looks suspiciously like dropout-with-context, a regularizer, not a competing task. Indeed several authors (LLaDA, MDLM) report *better* AR accuracy on small-data regimes when a masking loss is added.
 
 There is a regime where the losses **do** conflict: very high mask ratios (> 70%) over many consecutive steps cause the AR loss to degrade. NLD's training schedule (see Lecture 3.3) carefully manages the masking ratio distribution to avoid this.
 
@@ -58,7 +58,7 @@ $$
 T_{\text{2-model}} \;=\; T_{\text{drafter}} \cdot d + T_{\text{verifier}},
 $$
 
-where $d$ is the draft length. For a 1B-parameter drafter and an 8B verifier on the same GPU, $T_{\text{drafter}} \approx 0.25$ ms and $T_{\text{verifier}} \approx 2$ ms. The 2-model cycle is ~4 ms for ~3 accepted tokens — roughly 750 tok/s.
+where $d$ is the draft length. For a 1B-parameter drafter and an 8B verifier on the same GPU, $T_{\text{drafter}} \approx 0.25$ ms and $T_{\text{verifier}} \approx 2$ ms. The 2-model cycle is ~4 ms for ~3 accepted tokens, roughly 750 tok/s.
 
 **Self-speculation in a single 8B model** (diffusion drafts, AR verifies, same weights):
 
@@ -66,7 +66,7 @@ $$
 T_{\text{self-spec}} \;=\; T_{\text{block-diff}} + T_{\text{AR-verify}},
 $$
 
-where both terms reuse the *same* HBM load (the KV cache and base weights are already in SRAM after the first forward). Empirically NLD measures $T_{\text{block-diff}} \approx 2.8$ ms (diffusion is slightly slower per forward than AR because of the longer block) and $T_{\text{AR-verify}} \approx 2.2$ ms. The cycle is ~5 ms for ~6 accepted tokens — roughly 1200 tok/s.
+where both terms reuse the *same* HBM load (the KV cache and base weights are already in SRAM after the first forward). Empirically NLD measures $T_{\text{block-diff}} \approx 2.8$ ms (diffusion is slightly slower per forward than AR because of the longer block) and $T_{\text{AR-verify}} \approx 2.2$ ms. The cycle is ~5 ms for ~6 accepted tokens, roughly 1200 tok/s.
 
 The two-model approach is *not* slower because of compute. It is slower because the drafter exists *and is loaded from HBM*. Once you stop having a drafter, you stop paying the HBM tax. The unified model thus wins on the hardware where the AR baseline was hurting most: low batch, low concurrency, memory-bound.
 
@@ -86,7 +86,7 @@ If you have **one** checkpoint that can run in three attention modes (AR / block
 
 A two-model deployment cannot do this without either swapping models (slow) or running both simultaneously (RAM-wasteful). A unified model just sets a flag.
 
-> **Operational note.** NLD's `set_attention_mode(mode)` is a one-line runtime call on the attention block — no recompilation. You can switch modes mid-conversation.
+> **Operational note.** NLD's `set_attention_mode(mode)` is a one-line runtime call on the attention block, no recompilation. You can switch modes mid-conversation.
 
 ---
 
@@ -108,7 +108,7 @@ NLD's answer: **train both losses jointly from the start of stage 2** (after a b
 
 If your AR loss sees clean tokens at positions $0..t-1$ and your diffusion loss sees masked tokens at positions $0..L-1$ *in the same forward pass* without a structured attention mask separating them, then either:
 
-- The AR loss "sees" masked tokens upstream (impossible — AR's whole point is left-to-right causal conditioning on clean tokens), or
+- The AR loss "sees" masked tokens upstream (impossible, AR's whole point is left-to-right causal conditioning on clean tokens), or
 - The diffusion loss is run on a separate forward (double FLOPs).
 
 The solution is the **dual-stream input** + **structured attention mask** that we'll derive from first principles in Lecture 2.2. The mask is the technical core of mixed AR-diffusion training; without it the unification thesis collapses.
@@ -134,7 +134,7 @@ Mixed AR-diffusion did not appear ex nihilo. The proximate ancestors:
 
 Note that *most* of the algorithmic ideas pre-date NLD; what NLD contributes is (i) the engineering effort to make all three runtime modes work in the same model, (ii) the LoRA drafter alignment that unlocks 5–6× TPF, and (iii) the VLM extension with asymmetric dual-stream.
 
-For the reader's purposes, Series 2 is mostly about the *invariants* across these papers — the joint loss, the dual-stream input, the structured attention mask, the self-speculation cycle — because once you understand the invariants, the NLD-specific implementation details in Series 3 read as engineering choices rather than novel research.
+For the reader's purposes, Series 2 is mostly about the *invariants* across these papers, the joint loss, the dual-stream input, the structured attention mask, the self-speculation cycle, because once you understand the invariants, the NLD-specific implementation details in Series 3 read as engineering choices rather than novel research.
 
 ---
 
@@ -142,10 +142,10 @@ For the reader's purposes, Series 2 is mostly about the *invariants* across thes
 
 The next four lectures construct the unified model in pieces:
 
-- **2.2 — Joint loss and dual-stream layout.** Derive `L = L_AR + α · L_diff` from scratch, show why the dual-stream input is the right data layout, construct the 2L × 2L structured attention mask (M_BD, M_OBC, M_BC blocks). This is the technical core.
-- **2.3 — Self-speculation.** Diffusion drafts + AR verify in one model, KV-cache sharing between modes, linear vs quadratic self-speculation, why a LoRA helps.
-- **2.4 — Comparisons.** Mixed AR-diffusion vs MTP, EAGLE-1/2/3, Medusa, pure block-diffusion. When does the unified model win, and when do simpler approaches win?
-- **2.5 — Speed-of-Light analysis.** The theoretical ceiling on tokens/sec for any decoder-only LM, and how close NLD gets on different hardware.
+- **2.2 Joint loss and dual-stream layout.** Derive `L = L_AR + α · L_diff` from scratch, show why the dual-stream input is the right data layout, construct the 2L × 2L structured attention mask (M_BD, M_OBC, M_BC blocks). This is the technical core.
+- **2.3 Self-speculation.** Diffusion drafts + AR verify in one model, KV-cache sharing between modes, linear vs quadratic self-speculation, why a LoRA helps.
+- **2.4 Comparisons.** Mixed AR-diffusion vs MTP, EAGLE-1/2/3, Medusa, pure block-diffusion. When does the unified model win, and when do simpler approaches win?
+- **2.5 Speed-of-Light analysis.** The theoretical ceiling on tokens/sec for any decoder-only LM, and how close NLD gets on different hardware.
 
 By the end of Series 2 you should be able to read the NLD model code (Series 3) without surprises: you'll already know what every attention mask construction is supposed to compute.
 

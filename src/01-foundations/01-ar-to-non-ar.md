@@ -1,6 +1,6 @@
-# 1.1 — From AR to non-AR: why parallel decoding matters
+# 1.1 From AR to non-AR: why parallel decoding matters
 
-> **Goal of this lecture.** Frame the problem that diffusion language models are trying to solve. By the end you should be able to say, in one paragraph, **why** anyone would give up the comfort of left-to-right next-token prediction in exchange for the headaches of non-AR training and inference — and to do so in terms of *concrete deployment economics*, not vibes.
+> **Goal of this lecture.** Frame the problem that diffusion language models are trying to solve. By the end you should be able to say, in one paragraph, **why** anyone would give up the comfort of left-to-right next-token prediction in exchange for the headaches of non-AR training and inference, and to do so in terms of *concrete deployment economics*, not vibes.
 
 Background assumed: you can describe what a KV cache is, what GQA does, why prefill is compute-bound and decode is memory-bound, and roughly how speculative decoding works. If any of that is fuzzy, the suggested re-reads are at the bottom of this page.
 
@@ -26,7 +26,7 @@ A vivid restatement: **you paid to ship every parameter from HBM to SRAM, and go
 
 ### 1.1 Concurrency partially fixes this
 
-If you batch $B$ independent requests together, the same weight load amortizes across $B$ tokens. As $B$ grows you eventually hit the compute-bound regime where utilization improves. This is why **cloud serving** generally does very well with vanilla AR — you have hundreds or thousands of concurrent users, and the batch absorbs the memory cost.
+If you batch $B$ independent requests together, the same weight load amortizes across $B$ tokens. As $B$ grows you eventually hit the compute-bound regime where utilization improves. This is why **cloud serving** generally does very well with vanilla AR, you have hundreds or thousands of concurrent users, and the batch absorbs the memory cost.
 
 But concurrency does not help for the **single-user / low-concurrency** regime, which includes:
 
@@ -37,7 +37,7 @@ But concurrency does not help for the **single-user / low-concurrency** regime, 
 
 In all of those, the memory wall is the limit, and the only escape is to **get more than one token per weight load**. There are two known ways to do that:
 
-1. **Speculative decoding.** Use a small "drafter" model to emit $k$ candidate tokens in parallel, then verify them with the target model in a single forward pass. If $m \le k$ tokens are accepted, you've produced $m+1$ tokens per target forward instead of one. Speculative decoding is *still* AR under the hood — the target model is run autoregressively — but each forward batches $k+1$ positions through the same weight load. (Leviathan & Kalman 2022; Chen et al. 2023; EAGLE-2/3.)
+1. **Speculative decoding.** Use a small "drafter" model to emit $k$ candidate tokens in parallel, then verify them with the target model in a single forward pass. If $m \le k$ tokens are accepted, you've produced $m+1$ tokens per target forward instead of one. Speculative decoding is *still* AR under the hood, the target model is run autoregressively, but each forward batches $k+1$ positions through the same weight load. (Leviathan & Kalman 2022; Chen et al. 2023; EAGLE-2/3.)
 
 2. **Non-AR decoding.** Restructure the model so that **multiple positions are predicted in a single forward pass without needing a separate drafter**. This is the diffusion-LM route.
 
@@ -67,12 +67,12 @@ The NLD paper, the speed-of-light analysis, and almost every modern diffusion-LM
 
 ## 3. The non-AR design space
 
-Why didn't we have non-AR LMs all along? Mostly because the obvious idea — predict all tokens in parallel from a single context — destroys quality. The standard taxonomy of non-AR approaches:
+Why didn't we have non-AR LMs all along? Mostly because the obvious idea, predict all tokens in parallel from a single context, destroys quality. The standard taxonomy of non-AR approaches:
 
 ### 3.1 Parallel decoding from a single forward (no iteration)
 
 - *Non-Autoregressive Translation (NAT).* Gu et al. 2018. Predict every output token in parallel from the source encoding. Quality is significantly worse than AR because the model can't condition on its own previous predictions, and modeling distributions like $p(\mathbf{y} \mid \mathbf{x}) = \prod_t p(y_t \mid \mathbf{x})$ assumes token independence given $\mathbf{x}$, which is false for natural language.
-- *Mixture of Experts with conditional independence assumptions* — same conceptual issue.
+- *Mixture of Experts with conditional independence assumptions*, same conceptual issue.
 
 These methods get you TPF $= N$ in *one* forward, but at unacceptable quality.
 
@@ -82,14 +82,14 @@ These methods get you TPF $= N$ in *one* forward, but at unacceptable quality.
 
 ### 3.3 Multi-token prediction (MTP) heads
 
-- *Medusa, EAGLE-1/2/3, DeepSeek MTP.* Attach $k$ small heads to the base LM that each predict tokens $t+1, t+2, \dots, t+k$ in parallel; verify against the base LM. This is essentially **speculative decoding without a separate drafter** — the drafter and verifier share most parameters.
+- *Medusa, EAGLE-1/2/3, DeepSeek MTP.* Attach $k$ small heads to the base LM that each predict tokens $t+1, t+2, \dots, t+k$ in parallel; verify against the base LM. This is essentially **speculative decoding without a separate drafter**, the drafter and verifier share most parameters.
 - Strengths: trains cheaply on top of a frozen base. Weaknesses: the extra heads add parameters, the drafts are limited in lookahead by the head depth, and the heads have to be trained per-base-model.
 
 ### 3.4 Diffusion language models
 
 - *D3PM* (Austin et al., 2021): discrete-state diffusion via a parameterized forward transition.
 - *SEDD* (Lou et al., 2024): score entropy discrete diffusion.
-- *MDLM* (Sahoo et al., 2024): "Simple and effective masked diffusion language models" — collapses everything to a weighted masked-LM loss.
+- *MDLM* (Sahoo et al., 2024): "Simple and effective masked diffusion language models", collapses everything to a weighted masked-LM loss.
 - *LLaDA* (Nie et al., 2024): scales masked diffusion to 8B params.
 - *Block diffusion* (Arriola et al., 2024): factorizes the sequence into blocks so KV cache is reusable.
 - *SDAR* (2025), *Dream-7B*, *Nemotron-Labs-Diffusion* (Fu et al., 2026): production-grade diffusion (or AR+diffusion) LMs.
@@ -111,7 +111,7 @@ What they *do* is convert **memory-bound time** into **compute time**. Concretel
 - AR decode at batch 1: loads $W$ bytes, gets 1 token. Memory-bound.
 - Diffusion block decode at batch 1: loads $W$ bytes, processes a block of $B$ noisy positions, commits some subset $k \le B$ of them. The memory cost is roughly the same as one AR step (the noisy block is small compared to weights), but the FLOP cost grows linearly in $B$ and we get $k$ tokens out.
 
-So the *first* committed token is a touch slower than AR (because $B > 1$ token's worth of attention computation), but the *average* committed token is much faster. The model has been **moved from the memory-bound regime toward the compute-bound regime** — and that's exactly the regime where modern GPUs are good.
+So the *first* committed token is a touch slower than AR (because $B > 1$ token's worth of attention computation), but the *average* committed token is much faster. The model has been **moved from the memory-bound regime toward the compute-bound regime**, and that's exactly the regime where modern GPUs are good.
 
 The NLD paper opens with this exact framing: *"Generation moved from a memory-bound regime toward a compute-bound regime. Model weights are loaded once and reused to compute multiple tokens during generation."* You should keep this in mind every time you see a diffusion-LM speedup claim.
 
@@ -163,11 +163,11 @@ We've established:
 
 The next four lectures fill in the diffusion side:
 
-- **1.2** — what does it actually mean to "diffuse" a discrete sequence? We need the math before we can talk about training objectives.
-- **1.3** — modern simplified masked-diffusion objectives (the ones NLD actually uses).
-- **1.4** — why block-wise diffusion, and how it makes KV cache reuse work again.
-- **1.5** — sampling algorithms (the part that determines real TPF).
-- **1.6** — head-to-head with AR LMs on the dimensions that matter for production.
+- **1.2**, what does it actually mean to "diffuse" a discrete sequence? We need the math before we can talk about training objectives.
+- **1.3**, modern simplified masked-diffusion objectives (the ones NLD actually uses).
+- **1.4**, why block-wise diffusion, and how it makes KV cache reuse work again.
+- **1.5**, sampling algorithms (the part that determines real TPF).
+- **1.6**, head-to-head with AR LMs on the dimensions that matter for production.
 
 Then Series 2 will explain how to glue AR and diffusion together.
 
@@ -175,10 +175,10 @@ Then Series 2 will explain how to glue AR and diffusion together.
 
 ## Suggested re-reads (if any of section 1 was fuzzy)
 
-- *FlashAttention-2* (Dao, 2023) §2 — clearest published explanation of arithmetic intensity for attention.
-- *Efficient Memory Management for Large Language Model Serving with PagedAttention* (Kwon et al., 2023) §3 — KV-cache memory accounting.
-- *Speculative Decoding* (Leviathan et al., 2022; Chen et al., 2023) — the canonical speculative-decoding papers; necessary background for self-speculation in Series 2.
-- *EAGLE-3* (Li et al., 2024) — modern MTP-style speculative decoding, which NLD explicitly compares against.
+- *FlashAttention-2* (Dao, 2023) §2, clearest published explanation of arithmetic intensity for attention.
+- *Efficient Memory Management for Large Language Model Serving with PagedAttention* (Kwon et al., 2023) §3, KV-cache memory accounting.
+- *Speculative Decoding* (Leviathan et al., 2022; Chen et al., 2023), the canonical speculative-decoding papers; necessary background for self-speculation in Series 2.
+- *EAGLE-3* (Li et al., 2024), modern MTP-style speculative decoding, which NLD explicitly compares against.
 
 ## Exercises
 

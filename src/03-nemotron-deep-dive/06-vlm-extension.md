@@ -60,7 +60,7 @@ Key facts:
 - **24 layers, 16 heads, head_dim 64.** Standard Pixtral-style. The encoder is bidirectional (no causal mask), vision data has no notion of "future" tokens.
 - **RoPE on positions.** Patches receive 2D RoPE based on (row, col) within the image. `rope_theta = 10000` (the standard ViT-style theta, not the LM's 1e6).
 
-The encoder is initialized from **Pixtral 12B's vision tower**, which has the exact same shape. This initialization is critical, the bottom is on Lecture 3.6 §5.
+The encoder is initialized from the Pixtral-style vision tower of the **corresponding Ministral3-8B-Instruct-2512 VLM** (tech report sec 5.3), which has the exact same Pixtral-12B-class shape. This initialization is critical, the bottom of this lecture (§5) explains why.
 
 ---
 
@@ -126,7 +126,7 @@ A 2-layer MLP (4096 → 4096) is enough to absorb the cross-modal distribution s
 
 The projector uses GELU, the LM uses SwiGLU (silu-based). The choice reflects the upstream Pixtral convention: Pixtral's projector is GELU. NLD inherits this to make the Pixtral initialization compatible.
 
-In ablations (tech report §5.4), changing the projector to SiLU produces nearly identical scores. The GELU choice is for compatibility, not performance.
+Changing the projector activation does not change performance to the same degree as the encoder initialization choice; the GELU choice is for compatibility with the source VLM's projector, not because GELU is strictly preferred over SiLU.
 
 ---
 
@@ -188,24 +188,24 @@ The asymmetric dual-stream:
 - Allows vision-feature caching: once the encoder runs and the projector projects, the resulting `(N_vis, 4096)` tokens can be cached. Future chat turns over the same image reuse this cache.
 - Avoids the "what would noisy-vision even mean" semantic question. Vision tokens stay clean throughout.
 
-The tech report §5.4 confirms ~1.8× compute reduction at training time and ~2× at inference time, vs a hypothetical symmetric dual-stream.
+Qualitatively, vision tokens only being present in the clean view skips roughly half of the per-vision-token attention work that a symmetric dual-stream would otherwise require. The tech report does not publish exact compute-savings numbers for this design, so we describe the effect qualitatively rather than quote a specific multiplier.
 
 ---
 
 ## 5. Exact-merge initialization
 
-When training NLD-VLM from scratch, the initialization recipe is:
+When training NLD-VLM from scratch, the initialization recipe (tech report sec 5.3) is:
 
-1. **LM weights ← `nvidia/Nemotron-Labs-Diffusion-8B`.** The text-only NLD checkpoint.
-2. **Vision encoder weights ← `mistralai/Pixtral-12B-2409`** (its vision tower only).
-3. **Projector weights ← `mistralai/Pixtral-12B-2409`** (its multimodal projector only).
-4. **Image-token embedding ← average of all word embeddings.** Specifically, the new `<image>` token in the vocabulary (id 131072) gets its embedding initialized to the mean of all 131072 word embeddings.
+1. **LM weights ← the NLD-8B *instruct* checkpoint** (the Joint-SFT'd version of `nvidia/Nemotron-Labs-Diffusion-8B`).
+2. **Vision encoder weights ← the vision tower of `Ministral3-8B-Instruct-2512 VLM`** (the VLM counterpart of the same Ministral3 base that NLD initialized from).
+3. **Projector weights ← the multimodal projector of the same `Ministral3-8B-Instruct-2512 VLM`**.
+4. **Image-token embedding ← the existing `<image>` slot in the Ministral3 vocabulary** (no new vocabulary slot is added; the source VLM already defines this token).
 
-The phrase "exact merge" refers to: the Pixtral-12B's vision encoder is paired with Ministral3's LM. NLD-8B is trained from Ministral3. So **the Pixtral vision tower was originally trained against the LM that NLD-8B initialized from**. The Pixtral projector's outputs land in approximately the right neighborhood of Ministral3's input embedding space, and therefore approximately the right neighborhood of NLD-8B's input embedding space (since NLD-8B starts from Ministral3 and only differentially updates).
+The phrase "exact merge" refers to the fact that the source VLM (Ministral3-8B-Instruct-2512 VLM) was *built on the same Ministral3-8B base* that NLD-8B was continued-pretrained from. Therefore the projector's output space is already aligned with the LM's input embedding space at the architectural level: shapes match, hidden dimensions match, and the source projector was trained against an LM that the NLD LM differs from only by continued training on top of the same starting point. The tech report (sec 5.3) emphasises: "the merge is exact with no parameter mismatch or interpolation".
 
-The "exact" word emphasizes that the encoder + projector + LM were *literally trained as one stack* (Pixtral 12B), then transplanted intact. This is a stronger initialization than the typical VLM recipe (CLIP encoder + random projector + LLM).
+This is a stronger starting point than the typical VLM recipe (CLIP encoder + random projector + LLM): the encoder, projector, and LM were trained in a compatible setting before the merge, so the joint training only has to handle the diffusion-objective adaptation, not the modality-alignment from scratch.
 
-The result: NLD-VLM converges in **~70B tokens** of joint training, vs ~200B for a random-projector VLM (tech report §5.5 ablation).
+The tech report (sec 5.3) does not publish a token count for the joint VLM training stage; we therefore avoid quoting a specific number here.
 
 ### 5.1 What does "exact merge" require?
 
@@ -292,7 +292,7 @@ Self-spec works identically to text-only. The only difference: the prefix KV cac
 
 At per-cycle inference, the cache is read once (~1 HBM load) and the draft / verify forwards each take a per-block fraction. So the per-cycle wall-clock at VLM is roughly the same as text-only, *if* the cache is in-HBM (which it usually is for short conversations).
 
-For very long conversations or many cached images, KV-cache-bandwidth becomes a real cost. NLD-VLM's tech report Table 9 shows TPF dropping from 5.5 (text-only) to 4.5 (VLM with one 1024×1024 image), a meaningful reduction attributable to the extra prefix.
+For very long conversations or many cached images, the extra vision-token prefix in the KV cache becomes a real cost. The VLM benchmarks in tech report Table 9 record diffusion-mode TPF in the 2.5 to 3.6 range on multimodal evaluation suites, lower than the text-only diffusion-mode TPF of 2.57 reported in tech report Table 5. The difference reflects (a) image-task answers being shorter on average than text-task answers, which compresses the gain self-speculation can deliver, and (b) the extra cost of the long vision-token prefix in the KV cache.
 
 ---
 
@@ -302,11 +302,11 @@ The Pixtral encoder is trained in two phases during the VLM stage:
 
 **Phase 1, vision adapter warm-up (~5B tokens).** The LM is frozen; only the projector and the new `<image>` embedding train. Loss is the joint AR + diffusion. Goal: align the projector's output to the LM's input embedding distribution.
 
-**Phase 2, full VLM training (~70B tokens).** The LM, projector, and vision encoder are all updated. The joint loss continues. The encoder's learning rate is set 10× lower than the LM's to avoid destroying the pretrained Pixtral encoder.
+**Phase 2, full VLM training.** The LM, projector, and vision encoder are all updated. The joint loss continues. The encoder's learning rate is typically set lower than the LM's to avoid destroying the pretrained vision tower (the tech report does not publish the exact LR ratio for the VLM stage).
 
 Phase 1 is short and cheap (~500 H100-hours). Phase 2 is longer (~5000 H100-hours).
 
-By comparison, full pretraining of a comparable VLM from scratch (random init) takes ~30,000 H100-hours. The "exact merge" initialization is what enables this 6× efficiency gain.
+By comparison, full pretraining of a comparable VLM from scratch (random init) typically takes orders of magnitude more compute than the post-merge fine-tuning needed here. The "exact merge" initialization is what makes the VLM stage cheap relative to either training a VLM from scratch or aligning a CLIP-style encoder with a freshly-randomised projector.
 
 ---
 

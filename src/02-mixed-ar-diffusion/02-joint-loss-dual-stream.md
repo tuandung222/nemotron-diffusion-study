@@ -31,7 +31,7 @@ $$
 \text{SNR}_{\text{diff}} \;\approx\; \frac{\mathbb{E}[\|\nabla_\theta \log p_\theta(x_t \mid \cdot)\|^2]}{\text{Var}(\|\nabla_\theta \mathcal{L}_{\text{diff}}\|)}
 $$
 
-and the variance is inflated by the random masking, by a factor that grows with the per-batch mask-ratio variance. Halving $\alpha$ halves the contribution of this variance term to the joint update, leaving the AR signal-to-noise dominant. NLD's empirically-best $\alpha$ is **0.5** for the dense model and **0.3** for the VLM variant (where vision tokens add a further variance source).
+and the variance is inflated by the random masking, by a factor that grows with the per-batch mask-ratio variance. Halving $\alpha$ halves the contribution of this variance term to the joint update, leaving the AR signal-to-noise dominant. NLD's tech report (sec 5.1-5.2) reports $\alpha = 0.3$ as the value used throughout pretraining Stage 2 and joint SFT for all model sizes; the report's Table 2 ablation finds both AR and diffusion modes peak around $\alpha = 0.3$ (vs. $\alpha = 0.5$ and other values). The released NLD-VLM config file sets `dlm_loss_weight: 0.5`, which we read as a VLM-specific knob and discuss in Lecture 3.1; the headline training value remains $\alpha = 0.3$.
 
 > **Practical note.** Don't read too much into the exact value of $\alpha$. It is the kind of hyperparameter that's tuned per-recipe and per-mask-schedule; what matters is that it is *finite and bounded away from 1*.
 

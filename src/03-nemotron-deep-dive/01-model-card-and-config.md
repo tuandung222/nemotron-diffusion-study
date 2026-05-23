@@ -13,11 +13,11 @@ References:
 
 ## 1. Where the weights come from
 
-The text model `nvidia/Nemotron-Labs-Diffusion-8B` is trained from a Ministral3-8B-Instruct-2512 initialization. Specifically:
+The text model `nvidia/Nemotron-Labs-Diffusion-8B` is trained from a Ministral3-8B *base* initialization (tech report sec 5.1: "we start from the pretrained Ministral3 base models"). Specifically:
 
-- **LM backbone:** initialized from Ministral3-8B-Instruct weights (decoder layers, embeddings, lm_head).
-- **Mask token:** a single new token (id 100) is added to the vocabulary as `[MASK]`. Its embedding is initialized to the mean of the embedding matrix.
-- **Joint pretraining:** ~600B tokens of additional joint-objective training on the same mixed corpus used for Ministral3. This is the "Stage 1" of NLD's training pipeline (Lecture 3.3).
+- **LM backbone:** initialized from the Ministral3-8B base checkpoint (decoder layers, embeddings, lm_head).
+- **Mask token:** a single new token (id 100) is added to the vocabulary as `[MASK]`. The released model uses `mask_token_id = 100` in the existing Ministral3 vocabulary; the tech report does not specify how this token's embedding is initialized.
+- **Two-stage continued pretraining:** 1T tokens of pure-AR continued pretraining (Stage 1) followed by 300B tokens of joint AR + diffusion training at $\alpha = 0.3$ (Stage 2). This is the two-stage recipe analyzed in Lecture 3.3.
 
 The VLM extension `nvidia/Nemotron-Labs-Diffusion-VLM-8B` adds:
 
@@ -25,7 +25,7 @@ The VLM extension `nvidia/Nemotron-Labs-Diffusion-VLM-8B` adds:
 - A 2-layer MLP multimodal projector with 2×2 spatial merging.
 - An asymmetric dual-stream layout (vision tokens only in the clean view).
 
-The VLM LM-side is initialized from the text NLD-8B, then fine-tuned jointly with the vision tower over ~70B image-text tokens.
+The VLM is initialized from Nemotron-Labs-Diffusion-8B *instruct* on the LM side, and from the corresponding Ministral3-8B-Instruct-2512 VLM for the vision encoder and projector. Because the LM architectures are identical between the two sources, the merge is exact (tech report sec 5.3: "no parameter mismatch or interpolation"). The VLM is then continued-SFT'd jointly on multimodal instruction-following data [25]; the tech report does not state the exact token count for this stage.
 
 ---
 
@@ -133,7 +133,7 @@ dp_varying_mask_ratio: false
 | Field | Meaning |
 |---|---|
 | `ar_loss_weight` | Coefficient on the AR-loss term in the joint objective. NLD uses 1.0. |
-| `dlm_loss_weight` | Coefficient on the diffusion-loss term. In the VLM `config.json` this is 0.5 (so $\alpha = 0.5$ in the notation of Lecture 2.2). In the text-model config it's `null`, which the loader interprets as "use the default", which for `NemotronLabsDiffusionConfig` is also 0.5. |
+| `dlm_loss_weight` | Coefficient on the diffusion-loss term ($\alpha$ in Lecture 2.2's notation). The tech report (sec 5.1-5.2) reports $\alpha = 0.3$ for both pretraining and SFT of NLD-8B. The released text-only NLD-8B config has `dlm_loss_weight: null` (an inference checkpoint, no training loss is computed). The released VLM config has `dlm_loss_weight: 0.5`, used for the VLM's continued joint training. We therefore quote $\alpha = 0.3$ as the canonical value when discussing training in this lecture and Lecture 3.3. |
 | `dlm_paradigm` | "bidirectional" means the diffusion mode uses fully bidirectional attention within blocks (the standard MDLM / block-diffusion setting). Other valid values from the source code are "autoregressive" (degenerate, no diffusion) and "block_diff" (block-causal + bidirectional intra-block, used at training time). |
 | `block_size` | The block size $B$ used for both training and inference. Tied to `block_length` at generation time. |
 | `mask_token_id` | The token id used for `[MASK]` in the absorbing-state diffusion. NLD reserves id 100, the first available slot after the Ministral3 special tokens. |
@@ -233,7 +233,7 @@ num_hidden_layers:       24
 
 Image up to 1540×1540, patched into 14×14 tiles, giving up to $(1540/14)^2 = 12{,}100$ patches per image. After 2×2 spatial merge: up to ~3000 tokens per image. The projector then maps each 4096-dim merged-patch vector to a 4096-dim LM token (no dim change).
 
-The vision tower is **initialized from `mistralai/Pixtral-12B-2409`'s encoder**, which has the same shape. The choice ensures the projected vision tokens land in approximately the right neighborhood of the LM's input embedding space, see the "exact merge initialization" in Lecture 3.6.
+The vision tower (encoder + projector) is initialized from the corresponding Ministral3-8B-Instruct-2512 VLM (tech report sec 5.3), which shares the same Pixtral-style architecture. Because the architectures match exactly, the merge is bit-equivalent (tech report sec 5.3: "the merge is exact with no parameter mismatch or interpolation"). The projected vision tokens therefore land in the embedding-space neighborhood that the source VLM was already calibrated to. See the "exact merge initialization" discussion in Lecture 3.6.
 
 ---
 

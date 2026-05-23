@@ -10,39 +10,31 @@ References: NLD Tech Report §4, `forward_process` / `forward_process_complement
 
 ## 1. The two-stage curriculum
 
-NLD-8B's training is divided into two stages, with different objectives and data mixtures:
+NLD-8B's training (tech report sec 5.1-5.2) is divided into a continued-pretraining curriculum and a separate SFT phase:
 
-| Stage | Steps | Data | Loss | Mask ratio | Key trick |
+| Phase | Tokens | Data | Loss | Mask ratio | Key trick |
 |---|---|---|---|---|---|
-| **1: Joint pretraining** | ~300K | Mixed-domain (code, math, web, books, …) | $L_\text{AR} + 0.5 L_\text{diff}$ | Uniform $\rho \sim U(0.1, 0.9)$ | DP-rank varying |
-| **2: Joint SFT** | ~50K | Instruction-tuned (Tulu-mix-3 + math reasoning) | $L_\text{AR} + 0.5 L_\text{diff}$ | Cosine schedule, low to high | Prefix-mask only |
+| **Pretrain Stage 1: pure AR** | 1T | Pretraining mixture [22] | $L_\text{AR}$ only | (no masking) | (none, pure AR continued pretraining) |
+| **Pretrain Stage 2: joint AR + diffusion** | 300B | Same pretraining mixture | $L_\text{AR} + 0.3\, L_\text{diff}$ | Uniform $t \sim U[0,1]$ | DP-rank varying mask, global loss averaging |
+| **Joint SFT** | 45B | Instruct-SFT mixture [24] | $L_\text{AR} + 0.3\, L_\text{diff}$ | Uniform, no prompt masking | Loss on answer tokens only |
 
-The 8B initializes from a Ministral3-8B-Instruct checkpoint. The base model is already an AR-trained instruction-following LM; Stage 1 *adds* the diffusion capability while preserving the AR quality.
+The 8B initializes from a Ministral3-8B *base* checkpoint. Stage 1 of pretraining is therefore *pure-AR* continued pretraining (no diffusion loss yet), giving the model a stronger AR foundation before the joint objective is turned on in Stage 2. The Joint SFT phase then specializes the joint-objective base into an instruct model.
 
 ### 1.1 Why initialize from an AR-trained model?
 
-NLD's tech report Table 2 ablates four training strategies:
+The tech report (sec 2 and Table 1) ablates the contribution of each training-technique component (block-wise attention, global loss averaging, DP-rank varying masking, two-stage training). The component that gives the largest jump is **two-stage training**: starting from a well-trained AR base before turning on the diffusion loss is qualitatively cleaner than co-training both objectives from scratch.
 
-| Strategy | MATH | HumanEval | MMLU | TPF |
-|---|---|---|---|---|
-| (a) Random init, joint pretrain | 32 | 41 | 58 | 5.5 |
-| (b) AR pretrain → joint pretrain | 51 | 67 | 73 | 6.0 |
-| (c) AR pretrain → AR SFT → joint pretrain | 49 | 64 | 71 | 5.9 |
-| (d) AR pretrain → joint pretrain → AR SFT | 50 | 66 | 72 | 5.7 |
+Mechanistically: the AR base already encodes left-to-right linguistic priors that anchor the joint loss; turning on diffusion later perturbs the weights minimally. The tech report sec 2.1 frames this as "AR pretraining induces an implicit ability to plan ahead for future tokens, and diffusion training anchors to the left-to-right structure of language".
 
-Strategy (b) wins on quality and TPF. The key insight: **start joint training from a well-trained AR base**, so the diffusion objective adapts the AR weights minimally rather than co-training from scratch.
+The operational implication: if you want to NLD-ify your own AR base, you don't need a special "diffusion-friendly" base. Any well-trained Mistral-style decoder works as the Stage 1 starting point.
 
-Strategy (a) is roughly 18 quality points worse, joint pretraining from scratch is data-inefficient because the model has to learn both AR and diffusion priors simultaneously without strong supervision on either.
+### 1.2 Why keep the joint loss during SFT?
 
-The implication is operational: if you want to NLD-ify your own AR base, you don't need a special "diffusion-friendly" base. Any well-trained Mistral-style decoder works.
+After pretraining, the model is a joint-objective LM but with pretraining-distribution-tuned output. SFT specialises it into an instruct model on the SFT mixture [24].
 
-### 1.2 Why Stage 2 (joint SFT) at all?
+A naive approach would be AR-only SFT (use only $L_\text{AR}$). But this would degrade the diffusion quality: the model would learn instruction-following at the cost of forgetting how to denoise. NLD keeps the joint loss during SFT with the same $\alpha = 0.3$ as pretraining Stage 2 (tech report sec 5.2: "we adopt joint AR and diffusion training with an $\alpha$ of 0.3 throughout the SFT process"), so the diffusion objective is preserved.
 
-After Stage 1, the model is a joint-objective LM but with web-distribution-tuned output. Stage 2 specialises it for instruction-following on the Tulu / math / code mixture.
-
-A naive approach would be AR-only SFT (use only $L_\text{AR}$). But this would degrade the diffusion quality: the model would learn instruction-following at the cost of forgetting how to denoise. NLD keeps the joint loss in Stage 2 with the same $\alpha = 0.5$ as Stage 1, so the diffusion objective is preserved.
-
-The mask ratio schedule changes from Stage 1's uniform $U(0.1, 0.9)$ to a **cosine schedule with low-to-high progression**: early Stage-2 steps use low mask ratios (~0.2), late steps use high ratios (~0.7). This anneals the model toward the inference-time decode pattern, where the model commits high-confidence positions first and re-denoises lower-confidence positions.
+During SFT, the tech report (sec 5.2) notes that the training pipeline mirrors pretraining except that prompt tokens are not masked and the loss is computed only on the answer tokens. The exact mask-ratio schedule during SFT is not specified in the report; we treat the uniform schedule as the default.
 
 ---
 
@@ -120,7 +112,7 @@ The tech-report ablation (Table 3) shows ~1.5 points improvement on MATH from th
 NLD trains with:
 
 $$
-L_\text{total} = L_\text{AR} + \alpha \cdot L_\text{diff}, \quad \alpha = 0.5
+L_\text{total} = L_\text{AR} + \alpha \cdot L_\text{diff}, \quad \alpha = 0.3
 $$
 
 Three implementation details matter:
@@ -143,7 +135,7 @@ NLD's implementation normalises per-batch. The config field `global_loss_avg: tr
 
 ### 3.2 Gradient-norm decoupling
 
-A subtle issue: even with $\alpha = 0.5$, the *magnitude* of the AR-loss gradient can dominate the diffusion-loss gradient (or vice versa) depending on the model's current state. Naive joint training oscillates between the two objectives.
+A subtle issue: even with $\alpha = 0.3$, the *magnitude* of the AR-loss gradient can dominate the diffusion-loss gradient (or vice versa) depending on the model's current state. Naive joint training oscillates between the two objectives.
 
 NLD's training script uses **per-loss gradient clipping**: before adding the two losses, each is clipped to its own ceiling. The default ceilings are:
 
@@ -154,9 +146,12 @@ This decouples the loss magnitudes from the gradient magnitudes, which makes the
 
 ### 3.3 LR schedule
 
-Standard cosine LR with linear warmup. Stage 1: peak LR $3 \times 10^{-4}$, warmup 2000 steps, total 300K steps. Stage 2: peak LR $1 \times 10^{-4}$, warmup 500 steps, total 50K steps.
+Tech report sec 5.1-5.2 specifies:
 
-The lower LR in Stage 2 reflects that it's instruction tuning rather than pretraining, the gradient signal is noisier and more targeted, so a smaller step is appropriate.
+- **Pretraining (Stage 2 joint):** initial LR $1 \times 10^{-5}$ decayed to $3 \times 10^{-6}$ via a WSD (warmup-stable-decay) schedule with AdamW, weight decay 0.1. Global batch size 512, sequence length 4096, 256 NVIDIA H100 GPUs.
+- **Joint SFT:** initial LR $2.5 \times 10^{-6}$ decayed to $2.5 \times 10^{-7}$ via WSD, AdamW, weight decay 0.1. Global batch size 256, sequence length 16,384, 256 H100 GPUs. Loss computed on answer tokens only.
+
+The lower LR for SFT reflects that it's instruction tuning rather than pretraining, the gradient signal is noisier and more targeted, so a smaller step is appropriate. Reported counts (1T Stage-1 AR, 300B Stage-2 joint, 45B SFT tokens) translate to roughly half-a-million pretrain Stage-2 updates and roughly ten-thousand SFT updates given the above batch sizes; we quote tokens (the published unit) rather than steps to stay faithful to the report.
 
 ---
 
@@ -175,11 +170,11 @@ So in one training step across $K$ DP ranks, the model sees a *spectrum* of mask
 
 Per-sample random masking (each sequence gets its own random $\rho$) also covers the full range, but with high variance per-step. DP-rank-varying ensures **every step sees the full ratio range**, with one ratio per rank. The gradient is a low-variance estimate of the average-over-ratios.
 
-The tech-report Table 3 shows ~1.0 point improvement on MATH from `dp_varying_mask_ratio` vs per-sample random.
+The tech-report Table 1 ablation shows that `dp_varying_mask_ratio` adds a small but consistent average-accuracy gain on top of two-stage training and global loss averaging, in the same vein as the other three training-stability techniques.
 
 ### 4.2 What if DP world size = 1?
 
-`dp_varying_mask_ratio` is a no-op when the world size is 1 (single-GPU). It only matters for distributed training. The released checkpoint was trained with DP world size = 64 (8 nodes × 8 H100s), so the ratio spectrum is $\{0.1, 0.115, 0.13, ..., 0.9\}$, a 64-point grid.
+`dp_varying_mask_ratio` is a no-op when the world size is 1 (single-GPU). It only matters for distributed training. The released checkpoint was trained on 256 NVIDIA H100 GPUs (tech report sec 5.1); given the DP factor of that setup, the spectrum lays out ~tens of distinct mask ratios across ranks per step, with the ratios distributed across $[\epsilon, 1-\epsilon]$.
 
 In code (within `forward_process`):
 
@@ -220,7 +215,7 @@ Then `forward_process` receives this `loss_mask` and only applies masking at the
 The complete pseudo-code of one training step:
 
 ```python
-def joint_training_step(model, batch, optimizer, alpha=0.5):
+def joint_training_step(model, batch, optimizer, alpha=0.3):
     input_ids = batch['input_ids']
     B, L = input_ids.shape
 
